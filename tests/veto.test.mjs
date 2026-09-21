@@ -3,21 +3,45 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { z } from 'zod';
+const schemaSource = fs.readFileSync('src/content.config.ts', 'utf8')
+  .replace(/^import .*;\n/gm, '').replace('export const collections =', 'globalThis.collections =');
+const schemaContext = { z, defineCollection: value => value, glob: value => value };
+vm.runInNewContext(ts.transpileModule(schemaSource, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, schemaContext);
+const mapSchema = schemaContext.collections.maps.schema;
 const source = fs.readFileSync('src/utils/veto.ts', 'utf8');
 const context = { exports: {} };
-vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, context);
+vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
 const stage = JSON.parse(fs.readFileSync('src/data/tournaments/clash-for-glory-s1.json')).stages[0];
-const maps = new Map(fs.readdirSync('src/data/maps').map(f => [f.slice(0, -5), { data: JSON.parse(fs.readFileSync(`src/data/maps/${f}`)) }]));
-test('tournament veto resolves canonical maps and leaves two wheel candidates', () => {
+const maps = new Map(fs.readdirSync('src/data/maps').filter(f => f.endsWith('.json')).map(f => {
+  const id = f.slice(0, -5);
+  return [id, { id, data: mapSchema.parse(JSON.parse(fs.readFileSync(`src/data/maps/${f}`))) }];
+}));
+test('veto resolves active maps in name order and leaves wheel candidates', () => {
   const result = context.exports.resolveVeto(stage, maps);
-  assert.equal(result.maps.length - result.steps.length, 2);
-  assert.equal(result.maps[0].name, maps.get('desert').data.name);
+  const expected = [...maps.values()].filter(map => map.data.active).sort((a, b) => a.data.name.localeCompare(b.data.name));
+  assert.deepEqual(Array.from(result.maps, map => map.id), expected.map(map => map.id));
+  assert.ok(result.maps.length > result.steps.length);
+  for (const map of result.maps) assert.equal(map.name, maps.get(map.id).data.name);
 });
-test('invalid pools and pick sequences are rejected', () => {
-  for (const mutate of [s => s.veto.mapPoolIds.push('desert'), s => s.veto.mapPoolIds.push('missing'), s => s.veto.steps.pop() && s.veto.steps.pop() && s.veto.steps.pop(), s => s.series.mapCount = 5, s => s.veto.mapPoolIds.splice(0, 5)]) {
+test('inactive maps are excluded and omitted active flags use the schema default', () => {
+  const pool = new Map(maps);
+  pool.set('inactive-test', { id: 'inactive-test', data: mapSchema.parse({ name: 'Inactive test', active: false }) });
+  pool.set('default-test', { id: 'default-test', data: mapSchema.parse({ name: 'Default test' }) });
+  const result = context.exports.resolveVeto(stage, pool);
+  assert.ok(result.maps.some(map => map.id === 'default-test'));
+  assert.ok(!result.maps.some(map => map.id === 'inactive-test'));
+});
+test('invalid picks and unsupported series are rejected', () => {
+  for (const mutate of [s => s.veto.steps = s.veto.steps.filter(step => step.action !== 'pick'), s => s.veto.steps.push({ team: 'A', action: 'pick' }), s => s.series.mapCount = 5, s => s.series.type = 'best-of']) {
     const copy = structuredClone(stage); mutate(copy);
-    assert.throws(() => context.exports.resolveVeto(copy, maps));
+    assert.throws(() => context.exports.resolveVeto(copy, maps), /Each team must|fixed three-map/);
   }
+});
+test('empty pools and pools exhausted by veto steps are rejected', () => {
+  assert.throws(() => context.exports.resolveVeto(stage, new Map()), /leave at least one map/);
+  const active = [...maps].filter(([, map]) => map.data.active);
+  assert.throws(() => context.exports.resolveVeto(stage, new Map(active.slice(0, stage.veto.steps.length))), /leave at least one map/);
 });
 test('stages without veto settings remain unavailable', () => {
   const copy = structuredClone(stage); delete copy.veto;

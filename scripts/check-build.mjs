@@ -31,7 +31,7 @@ for (const page of pages) {
   }
   if (!description || canonicals !== 1) errors.push(`${page}: missing description or canonical`);
 }
-for (const asset of ['sitemap.xml', 'robots.txt', '404.html']) {
+for (const asset of ['sitemap-index.xml', 'robots.txt', '404.html']) {
   if (!(await exists(join(root, asset)))) errors.push(`Missing ${asset}`);
 }
 console.log(`Checked ${pages.length} production pages: ${errors.length} issues.`);

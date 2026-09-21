@@ -151,8 +151,10 @@ const teamCount = teams.length;
 
           return (
 
-            <article
+            <a
               class="team-card"
+              href={`/teams/${team.id}`}
+              aria-label={`View ${team.name} team information`}
               style={`--team-color: ${team.color};`}
               data-name={team.name.toLowerCase()}
               data-tag={team.tag.toLowerCase()}
@@ -245,10 +247,8 @@ const teamCount = teams.length;
                 <div><dt>Kills</dt><dd>{team.totalKills.toLocaleString('en-US')}</dd></div>
               </dl>
 
-              <a
+              <div
                 class="club-info"
-                href={`/teams/${team.id}`}
-                aria-label={`View ${team.name} team information`}
               >
 
                 <span>
@@ -262,9 +262,9 @@ const teamCount = teams.length;
                   →
                 </span>
 
-              </a>
+              </div>
 
-            </article>
+            </a>
 
           );
         })}
@@ -625,6 +625,8 @@ const teamCount = teams.length;
 
   .team-card {
     --team-color: #777B82;
+    color: var(--text-primary);
+    text-decoration: none;
 
     position: relative;
 
@@ -982,7 +984,7 @@ const teamCount = teams.length;
   }
 
 
-  .team-card > .club-info:hover {
+  .team-card:is(:hover, :focus-visible) > .club-info {
     background:
       #131417 !important;
 
@@ -991,14 +993,14 @@ const teamCount = teams.length;
   }
 
 
-  .club-info:hover
+  .team-card:is(:hover, :focus-visible)
   .club-info-arrow {
     transform:
       translateX(3px);
   }
 
 
-  .club-info:focus-visible {
+  .team-card:focus-visible {
     outline:
       2px
       solid
