@@ -45,7 +45,11 @@ const maps = (await getCollection('maps'))
             : '0.0';
 
         return (
-          <article class="map-card">
+          <a
+            class="map-card"
+            href={`/maps/${map.id}`}
+            aria-label={`View ${map.data.name} map information`}
+          >
             <div class="map-thumbnail">
               <img
                 src={`/maps/${map.id}.webp`}
@@ -93,14 +97,11 @@ const maps = (await getCollection('maps'))
               )}
             </div>
 
-            <a
-              href={`/maps/${map.id}`}
-              class="map-info"
-            >
+            <div class="map-info">
               Map info
               <span aria-hidden="true">→</span>
-            </a>
-          </article>
+            </div>
+          </a>
         );
       })}
     </div>
@@ -116,6 +117,8 @@ const maps = (await getCollection('maps'))
   }
 
   .map-card {
+    color: var(--text-primary);
+    text-decoration: none;
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);
@@ -289,7 +292,7 @@ const maps = (await getCollection('maps'))
   .maps-page .map-card dd { font-family: var(--maps-display); font-size: 32px; line-height: 1.2; color: var(--text-primary); }
   .maps-page .map-card dl > div:first-child dd { color: var(--accent); }
   .maps-page .map-info, .maps-page .map-card:hover .map-info, .maps-page .map-card:focus-within .map-info { background: transparent; border-top-color: var(--border); color: var(--accent); font-family: var(--maps-display); font-size: 19px; text-transform: uppercase; min-height: 50px; padding: 14px 18px; }
-  .maps-page .map-info:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+  .maps-page .map-card:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
   .maps-page .map-empty-state { min-height: 122px; align-items: flex-start; text-align: left; }
   .maps-page .map-empty-state strong { font-size: 18px; font-weight: 500; }
   .maps-page .map-empty-state span { font-size: 14px; }
