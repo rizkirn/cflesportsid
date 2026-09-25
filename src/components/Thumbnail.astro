@@ -53,5 +53,5 @@ const outputSrcset =
   width={width}
   src={outputSrc}
   srcset={outputSrcset}
-  onerror={fallback ? `this.onerror=null;this.src='${fallback}'` : attributes.onerror}
+  onerror={fallback ? `this.onerror=null;this.removeAttribute('srcset');this.src='${fallback}'` : attributes.onerror}
 />

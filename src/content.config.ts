@@ -84,6 +84,7 @@ const players = defineCollection({
     uid: z.string().nullable().optional(),
     team: z.string().optional(),
     role: z.string().default('Player'),
+    status: z.enum(['active', 'inactive']).default('active'),
     avatar: z.string().optional(),
     country: z.string().optional(),
     bio: z.string().optional(),

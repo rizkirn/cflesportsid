@@ -303,7 +303,7 @@ const qualificationPercent = Math.min(
         <div class="qualification-summary">
           {qualifiedTeams.map(team => (
             <a class="qualification-team" href={`/teams/${team.id}`}>
-              <Thumbnail src={team.logo} width={40} height="40" alt="" />
+              <Thumbnail src={team.logo} fallback="/logos/default.webp" width={40} height="40" alt="" />
               <span><strong>{team.name}</strong><small>Qualified</small></span>
             </a>
           ))}
@@ -488,6 +488,7 @@ const qualificationPercent = Math.min(
                       <a href={`/teams/${team.id}`}>
                         <Thumbnail
                           src={team.logo}
+                          fallback="/logos/default.webp"
                           width={32}
                           height="32"
                           alt=""
@@ -562,6 +563,7 @@ const qualificationPercent = Math.min(
                             <a href={`/teams/${team.id}`}>
                               <Thumbnail
                                 src={team.logo}
+                                fallback="/logos/default.webp"
                                 width={32}
                                 height="32"
                                 alt=""
@@ -722,6 +724,7 @@ const qualificationPercent = Math.min(
 
                 <div class="match-team">
                   <Thumbnail
+                    fallback="/logos/default.webp"
                     src={teamLogo(
                       getMatchTeam1Id(match)
                     )}
@@ -750,6 +753,7 @@ const qualificationPercent = Math.min(
 
                 <div class="match-team">
                   <Thumbnail
+                    fallback="/logos/default.webp"
                     src={teamLogo(
                       getMatchTeam2Id(match)
                     )}

@@ -6,7 +6,21 @@
   "endDate": "2026-09-27",
   "status": "upcoming",
   "format": "single-elimination",
-  "teams": [],
+  "teams": [
+    "demigod-kage",
+    "fearless",
+    "cha-tra-mue",
+    "howl-tvj",
+    "prmx-community",
+    "garuda-force",
+    "brotherhood",
+    "paman",
+    "k2-evolve",
+    "familia-nova",
+    "team-69",
+    "scissor-rex",
+    "g2c-prmx"
+  ],
   "stages": [
     {
       "id": "playoffs",
