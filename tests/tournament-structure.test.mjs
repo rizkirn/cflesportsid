@@ -11,11 +11,53 @@ vm.runInNewContext(code, context);
 const { validateTournament, resolveSourceTeam, getParticipantLabel, getMatchRound, getSourceNode } = context.exports;
 const read = path => JSON.parse(fs.readFileSync(new URL('../src/data/' + path, import.meta.url)));
 const tournament = { id: 'clash-for-glory-s1', data: read('tournaments/clash-for-glory-s1.json') };
-const matches = fs.readdirSync(new URL('../src/data/matches/', import.meta.url)).filter(f => f.endsWith('.json'))
+const allMatches = fs.readdirSync(new URL('../src/data/matches/', import.meta.url)).filter(f => f.endsWith('.json'))
   .map(f => ({ id: f.slice(0, -5), data: read('matches/' + f) }));
+const matches = allMatches.filter(m => m.data.tournamentId === tournament.id);
 const teamIds = new Set(tournament.data.teams);
 const match = (items, id) => items.find(m => m.id === id);
 const check = items => validateTournament(tournament, items, teamIds);
+
+test('S2 bracket follows the supplied draw and schedule', () => {
+  const s2 = { id: 'clash-for-glory-s2', data: read('tournaments/clash-for-glory-s2.json') };
+  const fixtures = allMatches.filter(m => m.data.tournamentId === s2.id);
+  assert.equal(fixtures.length, 13);
+  assert.doesNotThrow(() => validateTournament(s2, allMatches, new Set(s2.data.teams)));
+  const opening = fixtures.filter(m => m.data.roundId === 'top-16');
+  assert.deepEqual(opening.map(m => [m.data.bracketSlot, m.data.team1Id, m.data.team2Id]), [
+    [2, 'k2-evolve', 'prmx-community'],
+    [3, 'demigod-kage', 'paman'],
+    [4, 'fearless', 'team-69'],
+    [6, 'brotherhood', 'g2c-prmx'],
+    [8, 'cha-tra-mue', 'familia-nova'],
+  ]);
+  assert.deepEqual(s2.data.stages[0].byes.map(b => [b.slot, b.teamId]), [
+    [1, 'howl-tvj'], [5, 'garuda-force'], [7, 'scissor-rex'],
+  ]);
+  const parents = {
+    's2-m06': ['playoffs:bye-howl', 's2-m01'],
+    's2-m07': ['s2-m02', 's2-m03'],
+    's2-m08': ['playoffs:bye-garuda', 's2-m04'],
+    's2-m09': ['playoffs:bye-srx', 's2-m05'],
+    's2-m10': ['s2-m06', 's2-m07'],
+    's2-m11': ['s2-m08', 's2-m09'],
+    's2-m12': ['s2-m10', 's2-m11'],
+    's2-m13': ['s2-m10', 's2-m11'],
+  };
+  for (const [id, sources] of Object.entries(parents)) {
+    const m = match(fixtures, id);
+    assert.deepEqual([getSourceNode(m, 1), getSourceNode(m, 2)], sources);
+    if (m.data.roundId === 'bronze') {
+      assert.equal(m.data.team1Source.type, 'loser');
+      assert.equal(m.data.team2Source.type, 'loser');
+    }
+  }
+  for (const m of fixtures) {
+    assert.equal(m.data.status, 'upcoming');
+    assert.equal(m.data.date, ['top-16', 'quarter-final'].includes(m.data.roundId) ? '2026-09-26' : '2026-09-27');
+    assert.equal(m.data.winnerId, undefined);
+  }
+});
 
 test('existing tournament validates with 13 matches and three explicit byes', () => {
   assert.equal(matches.length, 13);

@@ -1,0 +1,20 @@
+{
+  "tournamentId": "clash-for-glory-s2",
+  "stageId": "playoffs",
+  "roundId": "bronze",
+  "bracketSlot": 1,
+  "team1Source": {
+    "type": "loser",
+    "matchId": "s2-m10"
+  },
+  "team2Source": {
+    "type": "loser",
+    "matchId": "s2-m11"
+  },
+  "date": "2026-09-27",
+  "status": "upcoming",
+  "score1": 0,
+  "score2": 0,
+  "roundDetails": [],
+  "playerStats": []
+}

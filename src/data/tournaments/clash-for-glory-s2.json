@@ -60,7 +60,26 @@
           "placement": 3
         }
       ],
-      "byes": [],
+      "byes": [
+        {
+          "id": "bye-howl",
+          "roundId": "top-16",
+          "slot": 1,
+          "teamId": "howl-tvj"
+        },
+        {
+          "id": "bye-garuda",
+          "roundId": "top-16",
+          "slot": 5,
+          "teamId": "garuda-force"
+        },
+        {
+          "id": "bye-srx",
+          "roundId": "top-16",
+          "slot": 7,
+          "teamId": "scissor-rex"
+        }
+      ],
       "veto": {
         "mapPoolIds": [
           "desert",
