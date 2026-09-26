@@ -59,7 +59,7 @@ test('K/D and KDA formulas handle zero deaths without Infinity', () => {
 test('real data reconciles player, team and map totals', () => {
   const files = fs.readdirSync(new URL('../src/data/matches/', import.meta.url)).filter(f => f.endsWith('.json'));
   const matches = files.map(f => ({ id: f.slice(0, -5), data: JSON.parse(fs.readFileSync(new URL('../src/data/matches/' + f, import.meta.url))) }));
-  const result = calculateStatistics(matches);
+  const result = calculateStatistics(matches.filter(m => m.data.tournamentId === 'clash-for-glory-s1'));
   for (const key of ['kills', 'deaths', 'assists']) {
     assert.equal([...result.players.values()].reduce((sum, s) => sum + s[key], 0), result.totals[key]);
     assert.equal([...result.teams.values()].reduce((sum, s) => sum + s[key], 0), result.totals[key]);

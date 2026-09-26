@@ -1,1 +1,15 @@
-{"name":"","ign":"UNCLE'76_Rezz","uid":"1611824237","team":"brotherhood","role":"Player","stats":{"kills":11,"deaths":30,"assists":9,"matchesPlayed":0,"mvpCount":0},"status":"active"}
+{
+  "name": "",
+  "ign": "UNCLE'BRO_Rezz",
+  "uid": "1611824237",
+  "team": "brotherhood",
+  "role": "Captain",
+  "stats": {
+    "kills": 11,
+    "deaths": 30,
+    "assists": 9,
+    "matchesPlayed": 0,
+    "mvpCount": 0
+  },
+  "status": "active"
+}

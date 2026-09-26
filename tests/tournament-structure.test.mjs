@@ -53,9 +53,7 @@ test('S2 bracket follows the supplied draw and schedule', () => {
     }
   }
   for (const m of fixtures) {
-    assert.equal(m.data.status, 'upcoming');
     assert.equal(m.data.date, ['top-16', 'quarter-final'].includes(m.data.roundId) ? '2026-09-26' : '2026-09-27');
-    assert.equal(m.data.winnerId, undefined);
   }
 });
 

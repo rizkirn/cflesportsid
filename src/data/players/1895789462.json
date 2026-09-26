@@ -1,1 +1,15 @@
-{"name":"","ign":"Zieee","uid":"1895789462","team":"endeavours-tvj","role":"Player","stats":{"kills":4,"deaths":7,"assists":1,"matchesPlayed":0,"mvpCount":0},"status":"active"}
+{
+  "name": "",
+  "ign": "K2_Ziee",
+  "uid": "1895789462",
+  "team": "k2-evolve",
+  "role": "Player",
+  "stats": {
+    "kills": 4,
+    "deaths": 7,
+    "assists": 1,
+    "matchesPlayed": 0,
+    "mvpCount": 0
+  },
+  "status": "active"
+}

@@ -6,9 +6,220 @@
   "team1Id": "fearless",
   "team2Id": "team-69",
   "date": "2026-09-26",
-  "status": "upcoming",
+  "status": "completed",
   "score1": 0,
-  "score2": 0,
-  "roundDetails": [],
-  "playerStats": []
+  "score2": 3,
+  "roundDetails": [
+    {
+      "round_number": 1,
+      "mapId": "power-supply",
+      "winnerId": "team-69",
+      "resultNote": "3-7"
+    },
+    {
+      "round_number": 2,
+      "mapId": "port",
+      "winnerId": "team-69",
+      "resultNote": "4-7"
+    },
+    {
+      "round_number": 3,
+      "mapId": "black-widow",
+      "winnerId": "team-69",
+      "resultNote": "0-7 (WO / walkover; no player or KDA data in result sheet)"
+    }
+  ],
+  "playerStats": [
+    {
+      "teamId": "fearless",
+      "uid": "1103150751",
+      "ign": "LuviiFL",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 11,
+          "deaths": 8,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 4,
+          "deaths": 11,
+          "assists": 5
+        }
+      ]
+    },
+    {
+      "teamId": "team-69",
+      "uid": "1192380567",
+      "ign": "M1R.ꪶꫂ",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 17,
+          "deaths": 4,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 13,
+          "deaths": 7,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "fearless",
+      "uid": "1631757441",
+      "ign": "ChojiuFL",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 7,
+          "deaths": 8,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 12,
+          "deaths": 9,
+          "assists": 0
+        }
+      ]
+    },
+    {
+      "teamId": "team-69",
+      "uid": "1078362342",
+      "ign": "ShalnaTT.ꪶꫂ",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 8,
+          "deaths": 7,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 15,
+          "deaths": 7,
+          "assists": 6
+        }
+      ]
+    },
+    {
+      "teamId": "fearless",
+      "uid": "1422279951",
+      "ign": "LifuuFL",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 8,
+          "assists": 5
+        },
+        {
+          "round_number": 2,
+          "kills": 1,
+          "deaths": 9,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "team-69",
+      "uid": "1656689899",
+      "ign": "Noy.ꪶꫂ",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 7,
+          "deaths": 8,
+          "assists": 8
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 7,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "fearless",
+      "uid": "1699186839",
+      "ign": "r1zzFL",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 8,
+          "assists": 1
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 10,
+          "assists": 10
+        }
+      ]
+    },
+    {
+      "teamId": "team-69",
+      "uid": "1552675192",
+      "ign": "Tunisiann.ꪶꫂ",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 5,
+          "deaths": 6,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 2,
+          "deaths": 7,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "fearless",
+      "uid": "1832910230",
+      "ign": "PorscheFL",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 2,
+          "deaths": 9,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 13,
+          "deaths": 9,
+          "assists": 1
+        }
+      ]
+    },
+    {
+      "teamId": "team-69",
+      "uid": "1285860853",
+      "ign": "Pendok.ꪶꫂ",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 4,
+          "deaths": 8,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 7,
+          "assists": 8
+        }
+      ]
+    }
+  ],
+  "winnerId": "team-69"
 }

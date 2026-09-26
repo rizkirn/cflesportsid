@@ -1,1 +1,15 @@
-{"name":"","ign":"UNCLE'BRO_Jef","uid":"1671462718","team":"brotherhood","role":"Player","stats":{"kills":19,"deaths":28,"assists":10,"matchesPlayed":0,"mvpCount":0},"status":"active"}
+{
+  "name": "",
+  "ign": "UNCLE'BRO_Jef",
+  "uid": "1671462718",
+  "team": "brotherhood",
+  "role": "Player",
+  "stats": {
+    "kills": 19,
+    "deaths": 28,
+    "assists": 10,
+    "matchesPlayed": 0,
+    "mvpCount": 0
+  },
+  "status": "active"
+}

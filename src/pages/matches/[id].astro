@@ -329,6 +329,21 @@ const roundMVPs =
 
     </section>
 
+    {m.data.status === 'completed' && playerStats.length === 0 && roundDetails.length > 0 && (
+      <section class="section-spacing" aria-label="Map results">
+        <h2 class="section-title">Map results</h2>
+        <div class="mvp-grid">
+          {roundDetails.map((round, index) => (
+            <article class="mvp-card">
+              <h3>Map {round.round_number}: {roundMapNames[index]}</h3>
+              {round.resultNote && <p class="map-result-note">{round.resultNote}</p>}
+              <p>{teamsMap.get(round.winnerId)?.data.name ?? 'TBD'} wins</p>
+            </article>
+          ))}
+        </div>
+      </section>
+    )}
+
     <!-- =========================
          COMPLETED MATCH DATA
     ========================== -->

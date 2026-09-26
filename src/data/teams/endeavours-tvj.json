@@ -1,1 +1,19 @@
-{"name":"Endeavours TVJ","tag":"ENV","region":"ID","color":"#C9CDD2","placementPoints":0,"players":["1370124271","1105151021","1895789462","1047666366","1213356890"],"stats":{"wins":0,"losses":0,"draws":0,"matchesPlayed":0}}
+{
+  "name": "Endeavours TVJ",
+  "tag": "ENV",
+  "region": "ID",
+  "color": "#C9CDD2",
+  "placementPoints": 0,
+  "players": [
+    "1370124271",
+    "1105151021",
+    "1047666366",
+    "1213356890"
+  ],
+  "stats": {
+    "wins": 0,
+    "losses": 0,
+    "draws": 0,
+    "matchesPlayed": 0
+  }
+}

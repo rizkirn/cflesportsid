@@ -6,9 +6,29 @@
   "team1Id": "demigod-kage",
   "team2Id": "paman",
   "date": "2026-09-26",
-  "status": "upcoming",
-  "score1": 0,
+  "status": "completed",
+  "score1": 3,
   "score2": 0,
-  "roundDetails": [],
-  "playerStats": []
+  "roundDetails": [
+    {
+      "round_number": 1,
+      "mapId": "power-supply",
+      "winnerId": "demigod-kage",
+      "resultNote": "7-0 (WO / walkover; no player or KDA data in result sheet)"
+    },
+    {
+      "round_number": 2,
+      "mapId": "port",
+      "winnerId": "demigod-kage",
+      "resultNote": "7-0 (WO / walkover; no player or KDA data in result sheet)"
+    },
+    {
+      "round_number": 3,
+      "mapId": "black-widow",
+      "winnerId": "demigod-kage",
+      "resultNote": "7-0 (WO / walkover; no player or KDA data in result sheet)"
+    }
+  ],
+  "playerStats": [],
+  "winnerId": "demigod-kage"
 }

@@ -6,9 +6,274 @@
   "team1Id": "brotherhood",
   "team2Id": "g2c-prmx",
   "date": "2026-09-26",
-  "status": "upcoming",
+  "status": "completed",
   "score1": 0,
-  "score2": 0,
-  "roundDetails": [],
-  "playerStats": []
+  "score2": 3,
+  "roundDetails": [
+    {
+      "round_number": 1,
+      "mapId": "power-supply",
+      "winnerId": "g2c-prmx",
+      "resultNote": "0-7"
+    },
+    {
+      "round_number": 2,
+      "mapId": "port",
+      "winnerId": "g2c-prmx",
+      "resultNote": "1-7"
+    },
+    {
+      "round_number": 3,
+      "mapId": "black-widow",
+      "winnerId": "g2c-prmx",
+      "resultNote": "1-7"
+    }
+  ],
+  "playerStats": [
+    {
+      "teamId": "brotherhood",
+      "uid": "1671462718",
+      "ign": "UNCLE'BRO_Jef",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 4,
+          "deaths": 7,
+          "assists": 1
+        },
+        {
+          "round_number": 2,
+          "kills": 8,
+          "deaths": 7,
+          "assists": 3
+        },
+        {
+          "round_number": 3,
+          "kills": 4,
+          "deaths": 7,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1935026098",
+      "ign": "MineralPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 12,
+          "deaths": 3,
+          "assists": 6
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 8,
+          "assists": 6
+        },
+        {
+          "round_number": 3,
+          "kills": 12,
+          "deaths": 5,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "brotherhood",
+      "uid": "1611824237",
+      "ign": "UNCLE'BRO_Rezz",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 4,
+          "deaths": 7,
+          "assists": 0
+        },
+        {
+          "round_number": 2,
+          "kills": 3,
+          "deaths": 8,
+          "assists": 2
+        },
+        {
+          "round_number": 3,
+          "kills": 2,
+          "deaths": 8,
+          "assists": 0
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1551933778",
+      "ign": "GreezyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 2,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 6,
+          "deaths": 6,
+          "assists": 5
+        },
+        {
+          "round_number": 3,
+          "kills": 6,
+          "deaths": 2,
+          "assists": 3
+        }
+      ]
+    },
+    {
+      "teamId": "brotherhood",
+      "uid": "1652164082",
+      "ign": "UNCLE'BRO_Zod",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 2,
+          "deaths": 6,
+          "assists": 1
+        },
+        {
+          "round_number": 2,
+          "kills": 7,
+          "deaths": 8,
+          "assists": 5
+        },
+        {
+          "round_number": 3,
+          "kills": 3,
+          "deaths": 8,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1185225620",
+      "ign": "PinkyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 2,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 5,
+          "assists": 4
+        },
+        {
+          "round_number": 3,
+          "kills": 4,
+          "deaths": 4,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "brotherhood",
+      "uid": "1079858827",
+      "ign": "UNCLE'Cruze",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 1,
+          "deaths": 7,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 8,
+          "assists": 4
+        },
+        {
+          "round_number": 3,
+          "kills": 3,
+          "deaths": 8,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1345266890",
+      "ign": "KucayyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 3,
+          "deaths": 1,
+          "assists": 0
+        },
+        {
+          "round_number": 2,
+          "kills": 10,
+          "deaths": 5,
+          "assists": 5
+        },
+        {
+          "round_number": 3,
+          "kills": 6,
+          "deaths": 4,
+          "assists": 8
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1710216868",
+      "ign": "DurenPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 2,
+          "deaths": 4,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 8,
+          "deaths": 5,
+          "assists": 2
+        },
+        {
+          "round_number": 3,
+          "kills": 11,
+          "deaths": 2,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "brotherhood",
+      "uid": "1460096423",
+      "ign": "UNCLE'NobRain!",
+      "rounds": [
+        {
+          "round_number": 2,
+          "kills": 6,
+          "deaths": 7,
+          "assists": 6
+        },
+        {
+          "round_number": 3,
+          "kills": 5,
+          "deaths": 8,
+          "assists": 1
+        }
+      ]
+    }
+  ],
+  "winnerId": "g2c-prmx"
 }

@@ -6,9 +6,280 @@
   "team1Id": "cha-tra-mue",
   "team2Id": "familia-nova",
   "date": "2026-09-26",
-  "status": "upcoming",
-  "score1": 0,
+  "status": "completed",
+  "score1": 3,
   "score2": 0,
-  "roundDetails": [],
-  "playerStats": []
+  "roundDetails": [
+    {
+      "round_number": 1,
+      "mapId": "power-supply",
+      "winnerId": "cha-tra-mue",
+      "resultNote": "7-2"
+    },
+    {
+      "round_number": 2,
+      "mapId": "port",
+      "winnerId": "cha-tra-mue",
+      "resultNote": "7-2"
+    },
+    {
+      "round_number": 3,
+      "mapId": "black-widow",
+      "winnerId": "cha-tra-mue",
+      "resultNote": "7-3"
+    }
+  ],
+  "playerStats": [
+    {
+      "teamId": "cha-tra-mue",
+      "uid": "1817949845",
+      "ign": "SENDOKWARTEG",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 11,
+          "deaths": 6,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 4,
+          "deaths": 6,
+          "assists": 3
+        },
+        {
+          "round_number": 3,
+          "kills": 7,
+          "deaths": 7,
+          "assists": 3
+        }
+      ]
+    },
+    {
+      "teamId": "familia-nova",
+      "uid": "1240413385",
+      "ign": "FNOV`Chucky",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 9,
+          "deaths": 6,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 2,
+          "deaths": 9,
+          "assists": 4
+        },
+        {
+          "round_number": 3,
+          "kills": 4,
+          "deaths": 8,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "cha-tra-mue",
+      "uid": "1962941896",
+      "ign": "SherlyTjo",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 9,
+          "deaths": 7,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 11,
+          "deaths": 6,
+          "assists": 4
+        },
+        {
+          "round_number": 3,
+          "kills": 10,
+          "deaths": 7,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "familia-nova",
+      "uid": "1314377026",
+      "ign": "FNOV`Zepyr",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 8,
+          "deaths": 8,
+          "assists": 3
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 7,
+          "assists": 0
+        },
+        {
+          "round_number": 3,
+          "kills": 5,
+          "deaths": 8,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "cha-tra-mue",
+      "uid": "1741846753",
+      "ign": "ouxiriN",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 7,
+          "deaths": 6,
+          "assists": 5
+        },
+        {
+          "round_number": 2,
+          "kills": 14,
+          "deaths": 3,
+          "assists": 2
+        },
+        {
+          "round_number": 3,
+          "kills": 4,
+          "deaths": 5,
+          "assists": 3
+        }
+      ]
+    },
+    {
+      "teamId": "familia-nova",
+      "uid": "1871603006",
+      "ign": "FNOV`S1JA",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 8,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 7,
+          "assists": 2
+        },
+        {
+          "round_number": 3,
+          "kills": 6,
+          "deaths": 8,
+          "assists": 1
+        }
+      ]
+    },
+    {
+      "teamId": "cha-tra-mue",
+      "uid": "1120432314",
+      "ign": "LMFAO!",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 7,
+          "deaths": 7,
+          "assists": 4
+        },
+        {
+          "round_number": 2,
+          "kills": 6,
+          "deaths": 7,
+          "assists": 7
+        },
+        {
+          "round_number": 3,
+          "kills": 11,
+          "deaths": 6,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "familia-nova",
+      "uid": "1203260549",
+      "ign": "FNOV`DiKec",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 6,
+          "deaths": 9,
+          "assists": 5
+        },
+        {
+          "round_number": 2,
+          "kills": 4,
+          "deaths": 7,
+          "assists": 7
+        },
+        {
+          "round_number": 3,
+          "kills": 5,
+          "deaths": 9,
+          "assists": 5
+        }
+      ]
+    },
+    {
+      "teamId": "cha-tra-mue",
+      "uid": "1099707998",
+      "ign": "lilbahzin",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 5,
+          "deaths": 8,
+          "assists": 5
+        },
+        {
+          "round_number": 2,
+          "kills": 4,
+          "deaths": 6,
+          "assists": 7
+        },
+        {
+          "round_number": 3,
+          "kills": 9,
+          "deaths": 5,
+          "assists": 8
+        }
+      ]
+    },
+    {
+      "teamId": "familia-nova",
+      "uid": "1298852895",
+      "ign": "FNOV`Bebelac7",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 5,
+          "deaths": 8,
+          "assists": 5
+        },
+        {
+          "round_number": 2,
+          "kills": 4,
+          "deaths": 9,
+          "assists": 0
+        },
+        {
+          "round_number": 3,
+          "kills": 10,
+          "deaths": 8,
+          "assists": 2
+        }
+      ]
+    }
+  ],
+  "winnerId": "cha-tra-mue"
 }

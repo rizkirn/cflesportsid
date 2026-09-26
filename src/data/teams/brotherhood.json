@@ -1,1 +1,20 @@
-{"name":"Brotherhood","tag":"BRO","region":"ID","color":"#AD7F3A","placementPoints":0,"players":["1611824237","1671462718","1079858827","1460096423","1652164082"],"stats":{"wins":0,"losses":0,"draws":0,"matchesPlayed":0}}
+{
+  "name": "Brotherhood",
+  "tag": "BRO",
+  "region": "ID",
+  "color": "#AD7F3A",
+  "placementPoints": 0,
+  "players": [
+    "1611824237",
+    "1671462718",
+    "1079858827",
+    "1460096423",
+    "1652164082"
+  ],
+  "stats": {
+    "wins": 0,
+    "losses": 0,
+    "draws": 0,
+    "matchesPlayed": 0
+  }
+}
