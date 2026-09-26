@@ -563,13 +563,10 @@ const roundMVPs =
                               }
 
                               {
-                                roundDetails[i]
-                                  ?.resultNote && (
+                                !mvp &&
+                                roundDetails[i]?.resultNote && (
                                   <p class="map-result-note">
-                                    {
-                                      roundDetails[i]
-                                        .resultNote
-                                    }
+                                    {roundDetails[i].resultNote}
                                   </p>
                                 )
                               }
@@ -1333,7 +1330,8 @@ const roundMVPs =
   }
 
   .mvp-none {
-    margin-top: 1rem;
+    margin: 0;
+    padding: 16px 16px 0;
 
     color: var(--text-muted);
 

@@ -13,10 +13,266 @@
     "matchId": "s2-m04"
   },
   "date": "2026-09-26",
-  "status": "upcoming",
+  "status": "completed",
   "score1": 0,
-  "score2": 0,
-  "roundDetails": [],
-  "playerStats": [],
-  "team2Id": "g2c-prmx"
+  "score2": 3,
+  "roundDetails": [
+    {
+      "round_number": 1,
+      "mapId": "black-widow",
+      "winnerId": "g2c-prmx",
+      "resultNote": "1-7",
+      "mvp": "1935026098"
+    },
+    {
+      "round_number": 2,
+      "mapId": "ankara",
+      "winnerId": "g2c-prmx",
+      "resultNote": "0-7",
+      "mvp": "1935026098"
+    },
+    {
+      "round_number": 3,
+      "mapId": "port",
+      "winnerId": "g2c-prmx",
+      "resultNote": "1-7",
+      "mvp": "1935026098"
+    }
+  ],
+  "playerStats": [
+    {
+      "teamId": "garuda-force",
+      "uid": "1613598372",
+      "ign": "GRD_BjmKeras",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 5,
+          "deaths": 7,
+          "assists": 0
+        },
+        {
+          "round_number": 2,
+          "kills": 2,
+          "deaths": 7,
+          "assists": 1
+        },
+        {
+          "round_number": 3,
+          "kills": 3,
+          "deaths": 7,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1935026098",
+      "ign": "MineralPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 12,
+          "deaths": 2,
+          "assists": 6
+        },
+        {
+          "round_number": 2,
+          "kills": 11,
+          "deaths": 2,
+          "assists": 3
+        },
+        {
+          "round_number": 3,
+          "kills": 12,
+          "deaths": 1,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "garuda-force",
+      "uid": "1265115273",
+      "ign": "GRD_Fiko",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 2,
+          "deaths": 7,
+          "assists": 0
+        },
+        {
+          "round_number": 2,
+          "kills": 3,
+          "deaths": 7,
+          "assists": 0
+        },
+        {
+          "round_number": 3,
+          "kills": 2,
+          "deaths": 8,
+          "assists": 0
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1345266890",
+      "ign": "KucayyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 10,
+          "deaths": 1,
+          "assists": 7
+        },
+        {
+          "round_number": 2,
+          "kills": 9,
+          "deaths": 3,
+          "assists": 3
+        },
+        {
+          "round_number": 3,
+          "kills": 12,
+          "deaths": 2,
+          "assists": 1
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1185225620",
+      "ign": "PinkyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 7,
+          "deaths": 2,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 3,
+          "assists": 7
+        },
+        {
+          "round_number": 3,
+          "kills": 6,
+          "deaths": 5,
+          "assists": 4
+        }
+      ]
+    },
+    {
+      "teamId": "garuda-force",
+      "uid": "1438608264",
+      "ign": "GRD_ClodZero",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 0,
+          "deaths": 8,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 1,
+          "deaths": 7,
+          "assists": 1
+        },
+        {
+          "round_number": 3,
+          "kills": 4,
+          "deaths": 8,
+          "assists": 0
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1551933778",
+      "ign": "GreezyPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 5,
+          "deaths": 1,
+          "assists": 2
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 2,
+          "assists": 0
+        },
+        {
+          "round_number": 3,
+          "kills": 6,
+          "deaths": 3,
+          "assists": 10
+        }
+      ]
+    },
+    {
+      "teamId": "garuda-force",
+      "uid": "1454741676",
+      "ign": "GRD_Opekkz",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 0,
+          "deaths": 8,
+          "assists": 1
+        }
+      ]
+    },
+    {
+      "teamId": "g2c-prmx",
+      "uid": "1710216868",
+      "ign": "DurenPRMX",
+      "rounds": [
+        {
+          "round_number": 1,
+          "kills": 4,
+          "deaths": 3,
+          "assists": 0
+        },
+        {
+          "round_number": 2,
+          "kills": 5,
+          "deaths": 1,
+          "assists": 1
+        },
+        {
+          "round_number": 3,
+          "kills": 2,
+          "deaths": 2,
+          "assists": 2
+        }
+      ]
+    },
+    {
+      "teamId": "garuda-force",
+      "uid": "1321053062",
+      "ign": "GRD_RDWN",
+      "rounds": [
+        {
+          "round_number": 2,
+          "kills": 3,
+          "deaths": 7,
+          "assists": 1
+        },
+        {
+          "round_number": 3,
+          "kills": 3,
+          "deaths": 7,
+          "assists": 2
+        }
+      ]
+    }
+  ],
+  "team2Id": "g2c-prmx",
+  "winnerId": "g2c-prmx"
 }

@@ -11,16 +11,41 @@ import {
 const teamsMap = await getTeamMap();
 const tournamentsMap = await getTournamentMap();
 
-const matches = (await getCollection('matches')).sort((a, b) => {
-  if (a.data.status !== b.data.status) {
-    if (a.data.status === 'upcoming') return -1;
-    if (b.data.status === 'upcoming') return 1;
-    if (a.data.status === 'live') return -1;
-    if (b.data.status === 'live') return 1;
-  }
-  const dateDiff = new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
-  return dateDiff || getRoundOrder(b, tournamentsMap) - getRoundOrder(a, tournamentsMap);
-});
+const matches = (await getCollection('matches'))
+  .filter((m) => {
+    const team1Id = getMatchTeam1Id(m);
+    const team2Id = getMatchTeam2Id(m);
+
+    // Kalau kedua slot sudah punya team asli, selalu tampilkan.
+    // Termasuk semifinal/final yang statusnya upcoming.
+    if (team1Id && team2Id) return true;
+
+    // Kalau belum ada team, cek apakah masih placeholder bracket.
+    const participant1 = getParticipantLabel(m, 1).trim().toLowerCase();
+    const participant2 = getParticipantLabel(m, 2).trim().toLowerCase();
+
+    const isUnresolvedParticipant = (name: string) =>
+      name.startsWith('winner of') ||
+      name.startsWith('loser of');
+
+    return !isUnresolvedParticipant(participant1) &&
+           !isUnresolvedParticipant(participant2);
+  })
+  .sort((a, b) => {
+    if (a.data.status !== b.data.status) {
+      if (a.data.status === 'upcoming') return -1;
+      if (b.data.status === 'upcoming') return 1;
+      if (a.data.status === 'live') return -1;
+      if (b.data.status === 'live') return 1;
+    }
+
+    const dateDiff =
+      new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
+
+    return dateDiff ||
+      getRoundOrder(b, tournamentsMap) -
+      getRoundOrder(a, tournamentsMap);
+  });
 
 const rounds = [...new Set(matches.map(m => getRoundName(m, tournamentsMap)))];
 ---

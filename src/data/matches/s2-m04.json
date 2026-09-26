@@ -14,19 +14,22 @@
       "round_number": 1,
       "mapId": "power-supply",
       "winnerId": "g2c-prmx",
-      "resultNote": "0-7"
+      "resultNote": "0-7",
+      "mvp": "1935026098"
     },
     {
       "round_number": 2,
       "mapId": "port",
       "winnerId": "g2c-prmx",
-      "resultNote": "1-7"
+      "resultNote": "1-7",
+      "mvp": "1345266890"
     },
     {
       "round_number": 3,
       "mapId": "black-widow",
       "winnerId": "g2c-prmx",
-      "resultNote": "1-7"
+      "resultNote": "1-7",
+      "mvp": "1935026098"
     }
   ],
   "playerStats": [

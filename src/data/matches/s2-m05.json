@@ -14,19 +14,22 @@
       "round_number": 1,
       "mapId": "power-supply",
       "winnerId": "cha-tra-mue",
-      "resultNote": "7-2"
+      "resultNote": "7-2",
+      "mvp": "1817949845"
     },
     {
       "round_number": 2,
       "mapId": "port",
       "winnerId": "cha-tra-mue",
-      "resultNote": "7-2"
+      "resultNote": "7-2",
+      "mvp": "1741846753"
     },
     {
       "round_number": 3,
       "mapId": "black-widow",
       "winnerId": "cha-tra-mue",
-      "resultNote": "7-3"
+      "resultNote": "7-3",
+      "mvp": "1120432314"
     }
   ],
   "playerStats": [

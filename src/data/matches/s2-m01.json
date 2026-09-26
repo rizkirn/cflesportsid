@@ -14,19 +14,22 @@
       "round_number": 1,
       "mapId": "power-supply",
       "winnerId": "k2-evolve",
-      "resultNote": "7-2"
+      "resultNote": "7-2",
+      "mvp": "1610959993"
     },
     {
       "round_number": 2,
       "mapId": "port",
       "winnerId": "k2-evolve",
-      "resultNote": "7-4"
+      "resultNote": "7-4",
+      "mvp": "1895789462"
     },
     {
       "round_number": 3,
       "mapId": "black-widow",
       "winnerId": "k2-evolve",
-      "resultNote": "7-2"
+      "resultNote": "7-2",
+      "mvp": "1019748927"
     }
   ],
   "playerStats": [
