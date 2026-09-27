@@ -1,0 +1,28 @@
+---
+interface Props {
+  teamId: string;
+  teamName: string;
+  penalties: { points: number; reason: string }[];
+}
+const { teamId, teamName, penalties } = Astro.props;
+const id = `standing-penalty-${teamId}`;
+---
+
+{penalties.length > 0 && (
+  <>
+    <button class="penalty-marker" type="button" popovertarget={id} aria-label={`View penalty for ${teamName}`}>*</button>
+    <div id={id} popover class="penalty-popover" role="dialog" aria-label={`Penalty for ${teamName}`}>
+      {penalties.map(penalty => <p>-{penalty.points} points ({penalty.reason})</p>)}
+      <button type="button" popovertarget={id} popovertargetaction="hide">Close</button>
+    </div>
+  </>
+)}
+
+<style>
+  .penalty-marker { padding: 0 5px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; vertical-align: super; }
+  .penalty-marker:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+  .penalty-popover { margin: auto; max-width: calc(100vw - 32px); padding: 20px; border: 1px solid #555; background: #16171b; color: #f4f3ef; font: 16px/1.5 Arial, sans-serif; }
+  .penalty-popover p { margin: 0 0 16px; }
+  .penalty-popover button { min-height: 44px; padding: 6px 16px; border: 1px solid #777; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+  .penalty-popover::backdrop { background: rgb(0 0 0 / 35%); }
+</style>

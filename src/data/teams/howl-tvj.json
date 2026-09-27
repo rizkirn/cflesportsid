@@ -4,6 +4,13 @@
   "region": "ID",
   "color": "#009DFF",
   "placementPoints": 0,
+  "penalties": [
+    {
+      "tournamentId": "clash-for-glory-s2",
+      "points": 30,
+      "reason": "Administrative penalty"
+    }
+  ],
   "players": [
     "1225759000",
     "1096392869",

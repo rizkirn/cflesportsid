@@ -1,5 +1,6 @@
 ---
 import Thumbnail from '../components/Thumbnail.astro';
+import StandingPenalty from '../components/StandingPenalty.astro';
 import Layout from '../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { getOverallStandings } from '../utils/standings';
@@ -503,6 +504,7 @@ const qualificationPercent = Math.min(
 
                     <td class="standing-total">
                       {team.totalScore}
+                      <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
                     </td>
 
                     <td>
@@ -579,6 +581,7 @@ const qualificationPercent = Math.min(
 
                           <td class="standing-total">
                             {team.totalScore}
+                            <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
                           </td>
 
                           <td>

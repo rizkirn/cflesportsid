@@ -66,6 +66,11 @@ const teams = defineCollection({
     founded: z.string().optional(),
     description: z.string().optional(),
     placementPoints: z.number().default(0),
+    penalties: z.array(z.object({
+      tournamentId: z.string().min(1),
+      points: z.number().int().positive(),
+      reason: z.string().min(1),
+    })).default([]),
     players: z.array(z.string()).default([]),
     stats: z.object({
       wins: z.number().default(0),
