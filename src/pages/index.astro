@@ -6,12 +6,14 @@ import { getCollection } from 'astro:content';
 import { getOverallStandings } from '../utils/standings';
 import { calculateStatistics, emptyStats } from '../utils/statistics';
 import { getMatchTeam1Id, getMatchTeam2Id } from '../utils/content';
+import { getRoundOrder } from '../utils/tournament';
 import '../styles/home.css';
 
 const teams = await getCollection('teams');
 const allPlayers = await getCollection('players');
 const matches = await getCollection('matches');
 const tournaments = await getCollection('tournaments');
+const tournamentsById = new Map(tournaments.map(tournament => [tournament.id, tournament]));
 
 const calculated = calculateStatistics(matches);
 
@@ -52,6 +54,7 @@ const recentMatches = [...completedMatches]
   .sort(
     (a, b) =>
       b.data.date.localeCompare(a.data.date) ||
+      getRoundOrder(b, tournamentsById) - getRoundOrder(a, tournamentsById) ||
       b.id.localeCompare(a.id, undefined, { numeric: true })
   )
   .slice(0, 5);
