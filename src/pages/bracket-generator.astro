@@ -1,0 +1,110 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { getCollection } from 'astro:content';
+import '../styles/bracket-generator.css';
+const teams = (await getCollection('teams')).sort((a, b) => a.data.name.localeCompare(b.data.name));
+const tournaments = await getCollection('tournaments');
+const matches = await getCollection('matches');
+const localLogos = new Set(Object.keys(import.meta.glob('/public/logos/*.webp')));
+const teamLogo = (team: (typeof teams)[number]) => {
+  if (team.data.logo) return team.data.logo;
+  const logo = `/logos/${team.data.tag}.webp`;
+  return localLogos.has(`/public${logo}`) ? logo : '/logos/default.webp';
+};
+const catalog = {
+  teams: teams.map(team => ({ id: team.id, name: team.data.name, color: team.data.color || '#777B82', logo: teamLogo(team) })),
+  tournamentIds: tournaments.map(t => t.id),
+  matchIds: matches.map(m => m.id),
+};
+---
+
+<Layout title="Bracket Generator - CFL Esports ID" current="Bracket Generator" noindex>
+  <div class="container generator" data-catalog={JSON.stringify(catalog)}>
+    <div class="page-header">
+      <h1>Bracket generator</h1>
+      <p>Choose your teams, review the draw, then confirm it for export.</p>
+    </div>
+    <noscript>Enable JavaScript to select teams and generate a bracket.</noscript>
+    <p id="generator-loading" role="status">Loading bracket generator…</p>
+    <p id="generator-error" role="alert" hidden></p>
+    <form id="count-form" hidden>
+      <h2>1. Number of teams</h2>
+      <label for="team-count">Teams in this draw</label>
+      <input id="team-count" type="number" min="5" max={teams.length} step="1" required aria-describedby="count-help" />
+      <p id="count-help">Choose 5 to {teams.length} teams. Brackets start at 8 slots; empty slots become BYEs.</p>
+      <p id="count-summary" role="status"></p>
+      <button type="submit" class="primary">Choose teams</button>
+    </form>
+
+    <section id="selection" aria-labelledby="selection-heading" hidden>
+      <div class="generator-heading">
+        <h2 id="selection-heading" tabindex="-1">2. Choose teams</h2>
+        <button id="change-count" type="button">Change team count</button>
+      </div>
+      <label for="team-search">Search teams</label>
+      <input id="team-search" type="search" placeholder="Team name or tag" />
+      <p id="selection-status" role="status"></p>
+      <div class="team-options">
+        {teams.map(team => (
+          <label class="team-option" style={`--team-color:${team.data.color || '#777B82'}`} data-search={`${team.data.name} ${team.data.tag}`.toLowerCase()}>
+            <input type="checkbox" name="team" value={team.id} />
+            <img class="generator-team-logo" src={teamLogo(team)} alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.src='/logos/default.webp'" />
+            <span>{team.data.name} <small>{team.data.tag}</small></span>
+          </label>
+        ))}
+      </div>
+      <p id="no-teams" hidden>No teams match your search. Try another name or tag.</p>
+      <div class="generator-actions">
+        <button id="clear-teams" type="button">Clear selection</button>
+        <button id="continue-settings" type="button" class="primary" disabled>Bracket settings</button>
+      </div>
+    </section>
+
+    <form id="settings" hidden>
+      <div class="generator-heading">
+        <h2 id="settings-heading" tabindex="-1">3. Bracket settings</h2>
+        <button id="change-teams" type="button">Change teams</button>
+      </div>
+      <p id="settings-summary"></p>
+      <p>Single elimination · Random draw</p>
+      <div class="generator-fields">
+        <label>Tournament name<input id="tournament-name" required autocomplete="off" /></label>
+        <label>Tournament ID<input id="tournament-id" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="your-tournament-s3" aria-describedby="id-help" /></label>
+        <label>Start date<input id="start-date" type="date" required /></label>
+        <label>End date<input id="end-date" type="date" required /></label>
+        <label>Maps per match<input id="map-count" type="number" min="1" step="2" value="3" required /></label>
+      </div>
+      <p id="id-help">Use a new tournament ID. It identifies the exported tournament and its matches.</p>
+      <p>Every match uses the fixed map count, including when a team wins early. Match dates initially use the start date; review the schedule before publishing.</p>
+      <label class="generator-check"><input id="third-place" type="checkbox" /> Include a third-place match</label>
+      <button type="submit" class="primary">Generate bracket</button>
+    </form>
+
+    <section id="preview" aria-labelledby="preview-heading" hidden>
+      <div class="generator-heading">
+        <h2 id="preview-heading" tabindex="-1">4. Review draw</h2>
+        <button id="edit-settings" type="button">Edit settings</button>
+      </div>
+      <p id="draw-summary"></p>
+      <p id="draw-status" role="status"></p>
+      <div class="generator-actions">
+        <button id="regenerate" type="button">Regenerate</button>
+        <button id="confirm-draw" type="button" class="primary">Confirm draw</button>
+      </div>
+      <div id="draw-rounds" class="draw-rounds"></div>
+      <div id="export-controls" hidden>
+        <div class="generator-actions">
+          <button id="download-draw" type="button" class="primary">Download</button>
+          <button id="copy-draw" type="button">Copy</button>
+          <button id="unlock-draw" type="button">Unlock draw</button>
+        </div>
+        <p id="export-status" role="status"></p>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  import { initializeBracketGenerator } from '../utils/bracket-generator-ui';
+  initializeBracketGenerator();
+</script>

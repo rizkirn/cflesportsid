@@ -26,7 +26,13 @@ const { current } = Astro.props;
       <a href="/matches" class:list={[current === 'Matches' && 'active']}>Matches</a>
       <a href="/tournament" class:list={[current === 'Tournaments' && 'active']}>Tournaments</a>
       <a href="/maps" class:list={[current === 'Maps' && 'active']}>Maps</a>
-      <a href="/veto" class:list={[current === 'Veto' && 'active']}>Veto</a>
+      <details class="tools-nav" id="tools-nav">
+        <summary class:list={[(current === 'Veto' || current === 'Bracket Generator') && 'active']}>Tools</summary>
+        <div class="tools-links">
+          <a href="/veto" class:list={[current === 'Veto' && 'active']}>Veto</a>
+          <a href="/bracket-generator" class:list={[current === 'Bracket Generator' && 'active']}>Bracket Generator</a>
+        </div>
+      </details>
     </nav>
   </div>
 </header>
@@ -35,10 +41,25 @@ const { current } = Astro.props;
   document.addEventListener('DOMContentLoaded', () => {
     const menuBtn = document.getElementById('mobile-menu-btn');
     const nav = document.getElementById('main-nav');
+    const tools = document.getElementById('tools-nav');
+    document.addEventListener('click', event => {
+      if (tools && !tools.contains(event.target)) tools.open = false;
+    });
+    document.addEventListener('focusin', event => {
+      if (tools && !tools.contains(event.target)) tools.open = false;
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && tools?.open) {
+        tools.open = false;
+        tools.querySelector('summary').focus();
+        event.stopImmediatePropagation();
+      }
+    });
     
     if (menuBtn && nav) {
       const mobileViewport = window.matchMedia('(max-width: 768px)');
       const closeMenu = () => {
+        if (tools) tools.open = false;
         nav.classList.remove('active');
         document.body.classList.remove('menu-open');
         menuBtn.setAttribute('aria-expanded', 'false');
