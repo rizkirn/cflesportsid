@@ -993,6 +993,13 @@ body:has(.home-page) {
   white-space: nowrap;
 }
 
+.home-standings .standing-total-value {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
 .qualified-label {
   display: inline-block;
 

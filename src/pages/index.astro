@@ -506,8 +506,13 @@ const qualificationPercent = Math.min(
                     <td>{team.placementPoints}</td>
 
                     <td class="standing-total">
-                      {team.totalScore}
-                      <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
+                      <div class="standing-total-value">
+
+                        <span>{team.totalScore}</span>
+
+                        <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
+
+                      </div>
                     </td>
 
                     <td>
@@ -583,8 +588,13 @@ const qualificationPercent = Math.min(
                           <td>{team.placementPoints}</td>
 
                           <td class="standing-total">
-                            {team.totalScore}
-                            <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
+                            <div class="standing-total-value">
+
+                              <span>{team.totalScore}</span>
+
+                              <StandingPenalty teamId={team.id} teamName={team.name} penalties={team.penalties} />
+
+                            </div>
                           </td>
 
                           <td>
