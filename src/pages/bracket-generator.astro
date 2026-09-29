@@ -2,103 +2,475 @@
 import Layout from '../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import '../styles/bracket-generator.css';
-const teams = (await getCollection('teams')).sort((a, b) => a.data.name.localeCompare(b.data.name));
+
+const teams = (await getCollection('teams'))
+  .sort((a, b) => a.data.name.localeCompare(b.data.name));
+
 const tournaments = await getCollection('tournaments');
 const matches = await getCollection('matches');
-const localLogos = new Set(Object.keys(import.meta.glob('/public/logos/*.webp')));
+
+const localLogos = new Set(
+  Object.keys(import.meta.glob('/public/logos/*.webp'))
+);
+
 const teamLogo = (team: (typeof teams)[number]) => {
   if (team.data.logo) return team.data.logo;
+
   const logo = `/logos/${team.data.tag}.webp`;
-  return localLogos.has(`/public${logo}`) ? logo : '/logos/default.webp';
+
+  return localLogos.has(`/public${logo}`)
+    ? logo
+    : '/logos/default.webp';
 };
+
 const catalog = {
-  teams: teams.map(team => ({ id: team.id, name: team.data.name, color: team.data.color || '#777B82', logo: teamLogo(team) })),
+  teams: teams.map(team => ({
+    id: team.id,
+    name: team.data.name,
+    color: team.data.color || '#777B82',
+    logo: teamLogo(team)
+  })),
   tournamentIds: tournaments.map(t => t.id),
-  matchIds: matches.map(m => m.id),
+  matchIds: matches.map(m => m.id)
 };
 ---
 
-<Layout title="Bracket Generator - CFL Esports ID" current="Bracket Generator" noindex>
-  <div class="container generator" data-catalog={JSON.stringify(catalog)}>
-    <div class="page-header">
-      <h1>Bracket generator</h1>
-      <p>Choose your teams, review the draw, then confirm it for export.</p>
-    </div>
-    <noscript>Enable JavaScript to select teams and generate a bracket.</noscript>
-    <p id="generator-loading" role="status">Loading bracket generator…</p>
-    <p id="generator-error" role="alert" hidden></p>
-    <form id="count-form" hidden>
-      <h2>1. Number of teams</h2>
-      <label for="team-count">Teams in this draw</label>
-      <input id="team-count" type="number" min="5" max={teams.length} step="1" required aria-describedby="count-help" />
-      <p id="count-help">Choose 5 to {teams.length} teams. Brackets start at 8 slots; empty slots become BYEs.</p>
-      <p id="count-summary" role="status"></p>
-      <button type="submit" class="primary">Choose teams</button>
+<Layout
+  title="Bracket Generator - CFL Esports ID"
+  current="Bracket Generator"
+  noindex
+>
+  <div
+    class="container generator"
+    data-catalog={JSON.stringify(catalog)}
+  >
+    <!-- PAGE HEADER -->
+
+    <header class="page-header">
+      <h1>Bracket Generator</h1>
+
+      <p class="page-description">
+        Select the participants, configure the tournament, then generate the draw.
+      </p>
+    </header>
+
+    <noscript>
+      Enable JavaScript to select teams and generate a bracket.
+    </noscript>
+
+    <p
+      id="generator-loading"
+      class="generator-message"
+      role="status"
+    >
+      Loading bracket generator…
+    </p>
+
+    <p
+      id="generator-error"
+      class="generator-error"
+      role="alert"
+      hidden
+    ></p>
+
+    <!-- PARTICIPANTS: TEAM COUNT -->
+
+    <form
+      id="count-form"
+      class="generator-stage"
+      hidden
+    >
+      <div class="stage-header">
+        <h2>Participants</h2>
+      </div>
+
+      <div class="count-layout">
+        <div class="count-field">
+          <label for="team-count">
+            How many teams?
+          </label>
+
+          <input
+            id="team-count"
+            type="number"
+            min="5"
+            max={teams.length}
+            step="1"
+            required
+            aria-describedby="count-help"
+          />
+        </div>
+
+        <div class="count-result">
+          <span>Bracket</span>
+
+          <strong
+            id="count-summary"
+            role="status"
+          ></strong>
+        </div>
+      </div>
+
+      <p
+        id="count-help"
+        class="field-help"
+      >
+        Choose the number of participating teams.
+      </p>
+
+      <div class="generator-actions">
+        <button
+          type="submit"
+          class="primary"
+        >
+          Choose teams
+        </button>
+      </div>
     </form>
 
-    <section id="selection" aria-labelledby="selection-heading" hidden>
-      <div class="generator-heading">
-        <h2 id="selection-heading" tabindex="-1">2. Choose teams</h2>
-        <button id="change-count" type="button">Change team count</button>
+    <!-- PARTICIPANTS: TEAM SELECTION -->
+
+    <section
+      id="selection"
+      class="generator-stage"
+      aria-labelledby="selection-heading"
+      hidden
+    >
+      <div class="stage-header stage-header-actions">
+        <div>
+          <h2
+            id="selection-heading"
+            tabindex="-1"
+          >
+            Participants
+          </h2>
+
+          <p
+            id="selection-status"
+            class="stage-status"
+            role="status"
+          ></p>
+        </div>
+
+        <button
+          id="change-count"
+          type="button"
+          class="secondary"
+        >
+          Change team count
+        </button>
       </div>
-      <label for="team-search">Search teams</label>
-      <input id="team-search" type="search" placeholder="Team name or tag" />
-      <p id="selection-status" role="status"></p>
+
+      <div class="team-search">
+        <label for="team-search">
+          Search teams
+        </label>
+
+        <input
+          id="team-search"
+          type="search"
+          placeholder="Team name or tag"
+          autocomplete="off"
+        />
+      </div>
+
       <div class="team-options">
         {teams.map(team => (
-          <label class="team-option" style={`--team-color:${team.data.color || '#777B82'}`} data-search={`${team.data.name} ${team.data.tag}`.toLowerCase()}>
-            <input type="checkbox" name="team" value={team.id} />
-            <img class="generator-team-logo" src={teamLogo(team)} alt="" width="32" height="32" loading="lazy" onerror="this.onerror=null;this.src='/logos/default.webp'" />
-            <span>{team.data.name} <small>{team.data.tag}</small></span>
+          <label
+            class="team-option"
+            style={`--team-color:${team.data.color || '#777B82'}`}
+            data-search={`${team.data.name} ${team.data.tag}`.toLowerCase()}
+          >
+            <input
+              type="checkbox"
+              name="team"
+              value={team.id}
+            />
+
+            <img
+              class="generator-team-logo"
+              src={teamLogo(team)}
+              alt=""
+              width="32"
+              height="32"
+              loading="lazy"
+              onerror="this.onerror=null;this.src='/logos/default.webp'"
+            />
+
+            <span class="team-info">
+              <strong>{team.data.name}</strong>
+              <small>{team.data.tag}</small>
+            </span>
           </label>
         ))}
       </div>
-      <p id="no-teams" hidden>No teams match your search. Try another name or tag.</p>
+
+      <p
+        id="no-teams"
+        class="field-help"
+        hidden
+      >
+        No teams match your search.
+      </p>
+
       <div class="generator-actions">
-        <button id="clear-teams" type="button">Clear selection</button>
-        <button id="continue-settings" type="button" class="primary" disabled>Bracket settings</button>
+        <button
+          id="clear-teams"
+          type="button"
+          class="secondary"
+        >
+          Clear selection
+        </button>
+
+        <button
+          id="continue-settings"
+          type="button"
+          class="primary"
+          disabled
+        >
+          Continue to settings
+        </button>
       </div>
     </section>
 
-    <form id="settings" hidden>
-      <div class="generator-heading">
-        <h2 id="settings-heading" tabindex="-1">3. Bracket settings</h2>
-        <button id="change-teams" type="button">Change teams</button>
+    <!-- SETTINGS -->
+
+    <form
+      id="settings"
+      class="generator-stage settings-stage"
+      hidden
+    >
+      <div class="stage-header stage-header-actions">
+        <div>
+          <h2
+            id="settings-heading"
+            tabindex="-1"
+          >
+            Tournament Settings
+          </h2>
+        </div>
+
+        <button
+          id="change-teams"
+          type="button"
+          class="secondary"
+        >
+          Change Teams
+        </button>
       </div>
-      <p id="settings-summary"></p>
-      <p>Single elimination · Random draw</p>
-      <div class="generator-fields">
-        <label>Tournament name<input id="tournament-name" required autocomplete="off" /></label>
-        <label>Tournament ID<input id="tournament-id" required pattern="[a-z0-9]+(-[a-z0-9]+)*" placeholder="your-tournament-s3" aria-describedby="id-help" /></label>
-        <label>Start date<input id="start-date" type="date" required /></label>
-        <label>End date<input id="end-date" type="date" required /></label>
-        <label>Maps per match<input id="map-count" type="number" min="1" step="2" value="3" required /></label>
+
+      <div class="settings-summary" aria-label="Bracket summary">
+        <strong id="settings-summary"></strong>
+
+        <span class="summary-separator" aria-hidden="true">·</span>
+        <span>Single Elimination</span>
+
+        <span class="summary-separator" aria-hidden="true">·</span>
+        <span>Random Draw</span>
       </div>
-      <p id="id-help">Use a new tournament ID. It identifies the exported tournament and its matches.</p>
-      <p>Every match uses the fixed map count, including when a team wins early. Match dates initially use the start date; review the schedule before publishing.</p>
-      <label class="generator-check"><input id="third-place" type="checkbox" /> Include a third-place match</label>
-      <button type="submit" class="primary">Generate bracket</button>
+
+      <!-- TOURNAMENT -->
+
+      <fieldset class="settings-group">
+        <legend>
+          <span>Tournament</span>
+        </legend>
+
+        <div class="settings-field tournament-name-field">
+          <label for="tournament-name">
+            Tournament name
+          </label>
+
+          <input
+            id="tournament-name"
+            required
+            autocomplete="off"
+            placeholder="Clash for Glory: Road to All-Star S3"
+          />
+        </div>
+      </fieldset>
+
+      <!-- SCHEDULE -->
+
+      <fieldset class="settings-group">
+        <legend>
+          <span>Schedule</span>
+        </legend>
+
+        <div class="date-fields">
+          <label for="start-date">
+            <span>Start date</span>
+
+            <input
+              id="start-date"
+              type="date"
+              required
+            />
+          </label>
+
+          <label for="end-date">
+            <span>End date</span>
+
+            <input
+              id="end-date"
+              type="date"
+              required
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <!-- MATCH FORMAT -->
+
+      <fieldset class="settings-group">
+        <legend>
+          <span>Match Format</span>
+        </legend>
+
+        <div class="match-format">
+          <label
+            for="map-count"
+            class="map-count-field"
+          >
+            <span>Maps per match</span>
+
+            <input
+              id="map-count"
+              type="number"
+              min="1"
+              step="2"
+              value="3"
+              required
+            />
+          </label>
+
+          <label class="generator-check">
+            <input
+              id="third-place"
+              type="checkbox"
+            />
+
+            <span>
+              Include a third-place match
+            </span>
+          </label>
+        </div>
+
+        <p class="field-help">
+          Match dates initially use the tournament start date.
+          Review the schedule before publishing.
+        </p>
+      </fieldset>
+
+      <div class="settings-submit">
+        <button
+          type="submit"
+          class="primary"
+        >
+          Generate Bracket
+        </button>
+      </div>
     </form>
 
-    <section id="preview" aria-labelledby="preview-heading" hidden>
-      <div class="generator-heading">
-        <h2 id="preview-heading" tabindex="-1">4. Review draw</h2>
-        <button id="edit-settings" type="button">Edit settings</button>
-      </div>
-      <p id="draw-summary"></p>
-      <p id="draw-status" role="status"></p>
-      <div class="generator-actions">
-        <button id="regenerate" type="button">Regenerate</button>
-        <button id="confirm-draw" type="button" class="primary">Confirm draw</button>
-      </div>
-      <div id="draw-rounds" class="draw-rounds"></div>
-      <div id="export-controls" hidden>
-        <div class="generator-actions">
-          <button id="download-draw" type="button" class="primary">Download</button>
-          <button id="copy-draw" type="button">Copy</button>
-          <button id="unlock-draw" type="button">Unlock draw</button>
+    <!-- DRAW -->
+
+    <section
+      id="preview"
+      class="generator-stage draw-stage"
+      aria-labelledby="preview-heading"
+      hidden
+    >
+      <div class="stage-header stage-header-actions">
+        <div>
+          <h2
+            id="preview-heading"
+            tabindex="-1"
+          >
+            Review Draw
+          </h2>
         </div>
-        <p id="export-status" role="status"></p>
+
+        <button
+          id="edit-settings"
+          type="button"
+          class="secondary"
+        >
+          Edit settings
+        </button>
+      </div>
+
+      <div class="draw-summary">
+        <p id="draw-summary"></p>
+
+        <p
+          id="draw-status"
+          class="stage-status"
+          role="status"
+        ></p>
+      </div>
+
+      <div
+        id="draw-actions"
+        class="generator-actions"
+      >
+        <button
+          id="regenerate"
+          type="button"
+          class="secondary"
+        >
+          Regenerate
+        </button>
+
+        <button
+          id="confirm-draw"
+          type="button"
+          class="primary"
+        >
+          Confirm draw
+        </button>
+      </div>
+
+      <div
+        id="draw-rounds"
+        class="draw-rounds"
+      ></div>
+
+      <div
+        id="export-controls"
+        class="export-controls"
+        hidden
+      >
+        <div class="generator-actions">
+          <button
+            id="download-draw"
+            type="button"
+            class="primary"
+          >
+            Download JSON
+          </button>
+
+          <button
+            id="copy-draw"
+            type="button"
+            class="secondary"
+          >
+            Copy image
+          </button>
+
+          <button
+            id="unlock-draw"
+            type="button"
+            class="secondary"
+          >
+            Unlock draw
+          </button>
+        </div>
+
+        <p
+          id="export-status"
+          class="stage-status"
+          role="status"
+        ></p>
       </div>
     </section>
   </div>
@@ -108,3 +480,505 @@ const catalog = {
   import { initializeBracketGenerator } from '../utils/bracket-generator-ui';
   initializeBracketGenerator();
 </script>
+
+<style>
+  .generator {
+    padding-bottom:64px;
+  }
+
+  /* PAGE HEADER */
+
+  .page-header {
+    margin-bottom:28px;
+  }
+
+  .page-header h1 {
+    margin:0;
+  }
+
+  .page-description {
+    max-width:620px;
+    margin:18px 0 0;
+    color:var(--text-secondary);
+  }
+
+  /* COMMON */
+
+  .generator-stage {
+    width:100%;
+  }
+
+  .stage-header {
+    margin-bottom:26px;
+  }
+
+  .stage-header h2 {
+    margin:0;
+    font-size:28px;
+    line-height:1;
+    text-transform:uppercase;
+  }
+
+  .stage-header-actions {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:24px;
+  }
+
+  .stage-header-actions > div {
+    min-width:0;
+  }
+
+  .stage-status {
+    margin:8px 0 0;
+    color:var(--text-secondary);
+  }
+
+  .field-help {
+    color:var(--text-secondary);
+    font-size:13px;
+    line-height:1.5;
+  }
+
+  .generator-message {
+    color:var(--text-secondary);
+  }
+
+  .generator-error {
+    margin:0 0 24px;
+    padding:12px 14px;
+    border-left:2px solid #b43a3f;
+    background:#181315;
+  }
+
+  /* COUNT */
+
+  #count-form {
+    max-width:760px;
+  }
+
+  .count-layout {
+    display:flex;
+    align-items:flex-end;
+    gap:28px;
+  }
+
+  .count-field {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+  }
+
+  #team-count {
+    width:130px;
+    margin:0;
+  }
+
+  .count-result {
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    padding-bottom:8px;
+  }
+
+  .count-result > span {
+    color:var(--text-secondary);
+    font-size:11px;
+    text-transform:uppercase;
+  }
+
+  .count-result strong {
+    font-family:var(--generator-display);
+    font-size:20px;
+    font-weight:400;
+    line-height:1;
+    text-transform:uppercase;
+  }
+
+  #count-help {
+    margin:10px 0 0;
+  }
+
+  /* TEAM SELECTION */
+
+  .team-search {
+    max-width:480px;
+    margin-bottom:22px;
+  }
+
+  .team-search label {
+    display:block;
+    margin-bottom:8px;
+  }
+
+  #team-search {
+    width:100%;
+  }
+
+  .team-options {
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:10px;
+  }
+
+  .team-option {
+    position:relative;
+    display:flex;
+    align-items:center;
+    min-width:0;
+    min-height:66px;
+    gap:12px;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-left:2px solid var(--team-color);
+    background:var(--bg-secondary);
+    cursor:pointer;
+    transition:
+      background .15s ease,
+      border-color .15s ease;
+  }
+
+  .team-option:hover {
+    background:#17181c;
+  }
+
+  .team-option:has(input:checked) {
+    border-top-color:#48494f;
+    border-right-color:#48494f;
+    border-bottom-color:#48494f;
+    border-left-color:var(--team-color);
+    background:#191a1e;
+  }
+
+  .team-option input {
+    flex:none;
+    accent-color:var(--accent);
+  }
+
+  .generator-team-logo {
+    display:block;
+    flex:none;
+    width:32px;
+    height:32px;
+    object-fit:contain;
+  }
+
+  .team-info {
+    display:flex;
+    flex-direction:column;
+    min-width:0;
+    gap:3px;
+  }
+
+  .team-info strong {
+    overflow:hidden;
+    color:var(--text-primary);
+    font-weight:500;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+
+  .team-info small {
+    color:var(--text-secondary);
+    font-size:12px;
+  }
+
+  /* SETTINGS */
+
+  .settings-stage {
+    width:100%;
+  }
+
+  .settings-summary {
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+    margin:-4px 0 30px;
+    color:#a8a9ad;
+    font-size:15px;
+    line-height:1.4;
+  }
+
+  .settings-summary strong {
+    color:#fff;
+    font-weight:600;
+  }
+
+  .summary-separator {
+    color:#55575d;
+  }
+
+  .settings-group {
+    min-width:0;
+    margin:0;
+    padding:0 0 30px;
+    border:0;
+  }
+
+  .settings-group legend {
+    display:flex;
+    align-items:center;
+    width:100%;
+    margin:0 0 28px;
+    padding:0;
+    color:var(--accent);
+    font-family:var(--generator-display);
+    font-size:15px;
+    font-weight:500;
+    line-height:1;
+    text-transform:uppercase;
+  }
+
+  .settings-group legend::after {
+    content:'';
+    flex:1;
+    height:1px;
+    margin-left:12px;
+    background:var(--border);
+  }
+
+  .settings-field {
+    margin:0;
+  }
+
+  .settings-field label,
+  .date-fields label,
+  .map-count-field {
+    color:var(--text-primary);
+    font-size:14px;
+  }
+
+  .settings-field label {
+    display:block;
+    margin-bottom:10px;
+  }
+
+  .tournament-name-field {
+    width:min(560px,100%);
+  }
+
+  .tournament-name-field input {
+    width:100%;
+  }
+
+  .date-fields {
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:min(760px,100%);
+    gap:12px;
+  }
+
+  .date-fields label {
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  .date-fields input {
+    width:100%;
+  }
+
+  .match-format {
+    display:flex;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:28px;
+  }
+
+  .map-count-field {
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  #map-count {
+    width:120px;
+  }
+
+  .generator-check {
+    display:flex;
+    align-items:center;
+    min-height:52px;
+    gap:10px;
+    color:var(--text-primary);
+    cursor:pointer;
+    user-select:none;
+  }
+
+  .generator-check input {
+    width:20px;
+    height:20px;
+    margin:0;
+    accent-color:var(--accent);
+  }
+
+  .generator-check span {
+    line-height:1.3;
+  }
+
+  .settings-group > .field-help {
+    margin:18px 0 0;
+    color:var(--text-secondary);
+    font-size:13px;
+  }
+
+  .settings-submit {
+    display:flex;
+    justify-content:flex-start;
+    padding-top:4px;
+  }
+
+  .settings-submit .primary {
+    min-width:190px;
+  }
+
+  /* ACTIONS */
+
+  .generator-actions {
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:10px;
+    margin-top:22px;
+  }
+
+  /* DRAW */
+
+  .draw-summary {
+    margin:-8px 0 18px;
+  }
+
+  .draw-summary p {
+    margin:0 0 6px;
+  }
+
+  .draw-rounds {
+    margin-top:22px;
+  }
+
+  .export-controls {
+    margin-top:26px;
+    padding-top:0;
+    border-top:0 !important;
+  }
+
+  .export-controls .generator-actions {
+    justify-content:center;
+  }
+
+  #export-status {
+    text-align:center;
+  }
+
+  @media (max-width:900px) {
+    .team-options {
+      grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+  }
+
+  @media (max-width:640px) {
+    .generator {
+      padding-bottom:48px;
+    }
+
+    .page-header {
+      margin-bottom:24px;
+    }
+
+    .page-description {
+      margin-top:14px;
+    }
+
+    .stage-header {
+      margin-bottom:22px;
+    }
+
+    .stage-header h2 {
+      font-size:24px;
+    }
+
+    .stage-header-actions button {
+      flex:none;
+      padding:9px 11px;
+      font-size:12px;
+    }
+
+    .count-layout {
+      align-items:flex-start;
+      flex-direction:column;
+      gap:14px;
+    }
+
+    .count-result {
+      padding-bottom:0;
+    }
+
+    .team-search {
+      max-width:none;
+    }
+
+    .team-options {
+      grid-template-columns:1fr;
+    }
+
+    /* SETTINGS */
+
+    .settings-stage {
+      width:100%;
+    }
+
+    .settings-summary {
+      gap:7px;
+      margin-bottom:26px;
+      font-size:14px;
+    }
+
+    .settings-group {
+      padding-bottom:26px;
+    }
+
+    .settings-group legend {
+      margin-bottom:22px;
+      font-size:14px;
+    }
+
+    .tournament-name-field {
+      width:100%;
+    }
+
+    .date-fields {
+      grid-template-columns:1fr;
+      width:100%;
+      gap:18px;
+    }
+
+    .match-format {
+      align-items:flex-start;
+      flex-direction:column;
+      gap:18px;
+    }
+
+    .generator-check {
+      min-height:auto;
+    }
+
+    .settings-submit {
+      display:block;
+    }
+
+    .settings-submit .primary {
+      width:100%;
+    }
+
+    .generator-actions {
+      display:grid;
+      grid-template-columns:1fr;
+    }
+
+    .generator-actions button {
+      width:100%;
+    }
+  }
+</style>

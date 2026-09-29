@@ -947,6 +947,29 @@ const matchData = matches
     font-family: inherit;
   }
 
+  .veto-map-image {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+
+  .veto-map-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgb(0 0 0 / 55%);
+    pointer-events: none;
+  }
+
+  .veto-map-card :is(.veto-map-name, .veto-map-status) {
+    position: relative;
+    z-index: 1;
+    text-shadow: 0 2px 5px #000, 0 0 10px #000;
+  }
+
   .veto-map-card:focus-visible {
     outline: 2px solid var(--accent, #ff742e);
     outline-offset: 2px;
@@ -2200,6 +2223,7 @@ const matchData = matches
               }
               aria-label="${escapeHTML(mapName(map))} ${statusLabel || 'available'}"
             >
+              <img class="veto-map-image" src="/maps/${encodeURIComponent(map)}.webp" alt="" loading="lazy" onerror="this.onerror=null;this.src='/maps/placeholder.svg'" />
               <div class="veto-map-name">
                 ${escapeHTML(mapName(map))}
               </div>
@@ -2824,5 +2848,14 @@ const matchData = matches
     .veto-page .veto-team { padding: 14px 8px; }
     .veto-page .veto-team-tag { font-size: 24px; overflow-wrap: anywhere; }
     .veto-page .veto-action-prompt { font-size: 24px; }
+  }
+  .veto-page .veto-maps { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .veto-page .veto-map-card { width: 100%; min-width: 0; min-height: 0; aspect-ratio: 20 / 9; padding: 8px; border-radius: 0; gap: 4px; }
+  .veto-page .veto-map-card .veto-map-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  @media (max-width: 1000px) { .veto-page .veto-maps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 640px) {
+    .veto-page .veto-maps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .veto-page .veto-map-name { font-size: 20px; }
+    .veto-page .veto-map-status { font-size: 11px; }
   }
 </style>
