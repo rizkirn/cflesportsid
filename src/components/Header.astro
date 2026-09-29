@@ -27,10 +27,11 @@ const { current } = Astro.props;
       <a href="/tournament" class:list={[current === 'Tournaments' && 'active']}>Tournaments</a>
       <a href="/maps" class:list={[current === 'Maps' && 'active']}>Maps</a>
       <details class="tools-nav" id="tools-nav">
-        <summary class:list={[(current === 'Veto' || current === 'Bracket Generator') && 'active']}>Tools</summary>
+        <summary class:list={[(current === 'Bracket Generator' || current === 'Map Randomizer' || current === 'Veto') && 'active']}>Tools</summary>
         <div class="tools-links">
-          <a href="/veto" class:list={[current === 'Veto' && 'active']}>Veto</a>
           <a href="/bracket-generator" class:list={[current === 'Bracket Generator' && 'active']}>Bracket Generator</a>
+          <a href="/map-randomizer" class:list={[current === 'Map Randomizer' && 'active']}>Map Randomizer</a>
+          <a href="/veto" class:list={[current === 'Veto' && 'active']}>Map Veto</a>
         </div>
       </details>
     </nav>
