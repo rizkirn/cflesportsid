@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../../data-access/frontend-matches';
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { calculateStatistics, emptyStats, kdRatio } from '../../utils/statistics';
@@ -6,7 +8,7 @@ import { calculateStatistics, emptyStats, kdRatio } from '../../utils/statistics
 const allTeams = await getCollection('teams');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
 
-const allMatches = await getCollection('matches');
+const allMatches = await getFrontendMatches();
 const calculated = calculateStatistics(allMatches);
 
 const players = (await getCollection('players')).map(p => {

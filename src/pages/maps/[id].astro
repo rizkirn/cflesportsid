@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../../data-access/frontend-matches';
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import {
@@ -8,16 +10,10 @@ import {
 } from '../../utils/statistics';
 import { getRoundName } from '../../utils/tournament';
 
-export async function getStaticPaths() {
-  return (await getCollection('maps')).map(map => ({
-    params: { id: map.id },
-    props: { map }
-  }));
-}
+const map = (await getCollection('maps')).find(entry => entry.id === Astro.params.id);
+if (!map) return new Response(null, { status: 404 });
 
-const { map } = Astro.props;
-
-const matches = await getCollection('matches');
+const matches = await getFrontendMatches();
 const calculated = calculateStatistics(matches);
 const stats =
   calculated.maps.get(map.id) ?? emptyMapStats();

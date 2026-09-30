@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../data-access/frontend-matches';
+export const prerender = false;
 import Layout from '../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import '../styles/bracket-generator.css';
@@ -7,7 +9,7 @@ const teams = (await getCollection('teams'))
   .sort((a, b) => a.data.name.localeCompare(b.data.name));
 
 const tournaments = await getCollection('tournaments');
-const matches = await getCollection('matches');
+const matches = await getFrontendMatches();
 
 const localLogos = new Set(
   Object.keys(import.meta.glob('/public/logos/*.webp'))

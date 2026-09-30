@@ -15,9 +15,11 @@
     "db:migrate:local": "wrangler d1 migrations apply cflesportsid --local",
     "db:seed:local": "wrangler d1 execute cflesportsid --local --file=.generated/seed-s1-s2.sql",
     "db:validate": "wrangler d1 execute cflesportsid --local --file=scripts/validate-d1.sql",
-    "db:parity": "node scripts/check-d1-parity.mjs"
+    "db:parity": "node scripts/check-d1-parity.mjs",
+    "test:frontend": "npm run build && node tests/frontend-pages.integration.mjs"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.3.3",
     "@astrojs/sitemap": "^3.7.4",
     "astro": "^7.3.2"
   },

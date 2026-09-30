@@ -1,5 +1,7 @@
 # D1 match read layer
 
+This document describes the original read-layer commit. The subsequent frontend phase is documented in [d1-frontend.md](d1-frontend.md); it changes runtime/deployment configuration and the package, Wrangler and veto merge implications described below.
+
 The existing Astro collections and frontend consumers still use JSON. No UI,
 statistics calculation, production database, schema, package or Wrangler
 configuration is changed by this step.

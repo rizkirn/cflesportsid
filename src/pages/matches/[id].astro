@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../../data-access/frontend-matches';
+export const prerender = false;
 import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
@@ -12,16 +14,8 @@ import {
   getRoundMapId,
 } from '../../utils/content';
 
-export async function getStaticPaths() {
-  const matches = await getCollection('matches');
-
-  return matches.map(m => ({
-    params: { id: m.id },
-    props: { match: m },
-  }));
-}
-
-const { match } = Astro.props;
+const match = (await getFrontendMatches()).find(entry => entry.id === Astro.params.id);
+if (!match) return new Response(null, { status: 404 });
 const m = match;
 
 const allTeams = await getCollection('teams');

@@ -1,9 +1,19 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
+import cloudflare from '@astrojs/cloudflare';
+import { readdirSync } from 'node:fs';
+
+const site = 'https://cflesportsid.pages.dev';
+const detailPages = [['matches', 'matches'], ['teams', 'teams'], ['players', 'players'], ['maps', 'maps'], ['tournaments', 'tournament']]
+  .flatMap(([collection, route]) => readdirSync(new URL(`./src/data/${collection}/`, import.meta.url))
+    .filter(file => file.endsWith('.json'))
+    .map(file => `${site}/${route}/${file.slice(0, -5)}/`));
 
 export default defineConfig({
-  site: 'https://cflesportsid.pages.dev',
+  site,
+  adapter: cloudflare({ imageService: 'passthrough', prerenderEnvironment: 'node' }),
+  session: false,
   prefetch: true,
-  integrations: [sitemap()],
+  integrations: [sitemap({ customPages: detailPages })],
 });

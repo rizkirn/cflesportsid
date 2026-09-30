@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cflesportsid",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "binding": "ASSETS", "directory": "./dist/client" },
   "compatibility_date": "2026-09-30",
   "d1_databases": [
     {

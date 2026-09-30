@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../../data-access/frontend-matches';
+export const prerender = false;
 import { getOverallStandings } from '../../utils/standings';
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
@@ -12,21 +14,14 @@ import {
   getMatchWinnerId,
 } from '../../utils/content';
 
-export async function getStaticPaths() {
-  const teams = await getCollection('teams');
-  return teams.map(team => ({
-    params: { id: team.id },
-    props: { team },
-  }));
-}
-
-const { team } = Astro.props;
+const team = (await getCollection('teams')).find(entry => entry.id === Astro.params.id);
+if (!team) return new Response(null, { status: 404 });
 const allTeams = await getCollection('teams');
 const allPlayers = await getCollection('players');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
 const playersMap = new Map(allPlayers.map(p => [p.id, p]));
 const teamPlayers = team.data.players.map(pid => playersMap.get(pid)).filter(Boolean);
-const allMatches = await getCollection('matches');
+const allMatches = await getFrontendMatches();
 
 const teamMatches = allMatches.filter(m => getMatchTeam1Id(m) === team.id || getMatchTeam2Id(m) === team.id);
 

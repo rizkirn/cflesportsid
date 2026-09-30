@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../data-access/frontend-matches';
+export const prerender = false;
 import scrimSettings from '../data/veto/scrim.json';
 import { resolveVeto } from '../utils/veto';
 import Layout from '../layouts/Layout.astro';
@@ -13,7 +15,7 @@ import {
   getMatchTournamentId
 } from '../utils/content';
 
-const matches = await getCollection('matches');
+const matches = await getFrontendMatches();
 const teamsMap = await getTeamMap();
 const tournamentsMap = await getTournamentMap();
 const mapsMap = await getMapMap();

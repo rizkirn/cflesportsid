@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../data-access/frontend-matches';
+export const prerender = false;
 import Thumbnail from '../components/Thumbnail.astro';
 import StandingPenalty from '../components/StandingPenalty.astro';
 import Layout from '../layouts/Layout.astro';
@@ -11,7 +13,7 @@ import '../styles/home.css';
 
 const teams = await getCollection('teams');
 const allPlayers = await getCollection('players');
-const matches = await getCollection('matches');
+const matches = await getFrontendMatches();
 const tournaments = await getCollection('tournaments');
 const tournamentsById = new Map(tournaments.map(tournament => [tournament.id, tournament]));
 

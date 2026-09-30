@@ -1,4 +1,6 @@
 ---
+import { getFrontendMatches } from '../../data-access/frontend-matches';
+export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { getMatchRound } from '../../utils/tournament';
@@ -7,7 +9,7 @@ import {
   getMatchWinnerId,
 } from '../../utils/content';
 
-const matches = await getCollection('matches');
+const matches = await getFrontendMatches();
 const teams = await getCollection('teams');
 const allTournaments = await getCollection('tournaments');
 

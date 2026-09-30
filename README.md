@@ -21,7 +21,7 @@ npm run build:check
 npm run preview
 ```
 
-The build creates the static site in `dist/`. Cloudflare Pages builds the site after a push; build command: `npm run build`, output directory: `dist`. Do not edit generated files in `dist/` or `.astro/`.
+The build produces a Cloudflare Worker in `dist/server` and static assets in `dist/client`. Match-dependent pages use runtime D1 reads with whole-collection JSON fallback; other collections remain JSON. The former Pages static deployment needs a reviewed Workers deployment before hosting this phase. See [frontend D1 integration](docs/d1-frontend.md) for deployment implications, verification and safe integration of local changes. Do not edit generated files in `dist/` or `.astro/`.
 
 ## Data entry
 
