@@ -79,9 +79,12 @@ for (const {id,x} of matchRows) {
     const score = typeof rd.resultNote === 'string' && /^(\d+)\s*[-–]\s*(\d+)$/.test(rd.resultNote)
       ? rd.resultNote.match(/^(\d+)\s*[-–]\s*(\d+)$/).slice(1).map(Number) : [null,null];
     const mvp = rd.mvp && playerIds.has(String(rd.mvp)) ? String(rd.mvp) : null;
+    const inferredWinner = x.status === 'completed'
+      ? (rd.winnerId ?? (x.score1 > 0 && x.score2 === 0 ? x.team1Id : x.score2 > 0 && x.score1 === 0 ? x.team2Id : null))
+      : null;
     sql.push(insert('match_maps',
       ['match_id','map_number','map_id','winner_team_id','score_team1','score_team2','mvp_player_id','result_note'],
-      [q(id),n(rd.round_number),q(rd.mapId),q(rd.winnerId),n(score[0]),n(score[1]),q(mvp),q(rd.resultNote)]));
+      [q(id),n(rd.round_number),q(rd.mapId),q(inferredWinner),n(score[0]),n(score[1]),q(mvp),q(rd.resultNote)]));
   }
   for (const ps of x.playerStats ?? []) {
     for (const r of ps.rounds ?? []) {
