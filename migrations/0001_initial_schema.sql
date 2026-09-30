@@ -1,5 +1,16 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE teams (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  tag TEXT NOT NULL,
+  color TEXT,
+  logo TEXT,
+  region TEXT NOT NULL,
+  founded TEXT,
+  description TEXT
+);
+
 CREATE TABLE tournaments (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -10,17 +21,6 @@ CREATE TABLE tournaments (
   status TEXT NOT NULL CHECK (status IN ('upcoming','ongoing','completed')),
   format TEXT NOT NULL,
   winner_team_id TEXT REFERENCES teams(id)
-);
-
-CREATE TABLE teams (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  tag TEXT NOT NULL,
-  color TEXT,
-  logo TEXT,
-  region TEXT NOT NULL,
-  founded TEXT,
-  description TEXT
 );
 
 CREATE TABLE players (
