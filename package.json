@@ -11,7 +11,10 @@
     "data:check": "node scripts/check-data.mjs",
     "data:new-match": "node scripts/new-match.mjs",
     "build:check": "node scripts/check-build.mjs",
-    "db:seed:generate": "node scripts/generate-d1-seed.mjs"
+    "db:seed:generate": "node scripts/generate-d1-seed.mjs",
+    "db:migrate:local": "wrangler d1 migrations apply cflesportsid --local",
+    "db:seed:local": "wrangler d1 execute cflesportsid --local --file=.generated/seed-s1-s2.sql",
+    "db:validate": "wrangler d1 execute cflesportsid --local --file=scripts/validate-d1.sql"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",
@@ -24,6 +27,7 @@
     "fsevents@2.3.3": true
   },
   "devDependencies": {
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "wrangler": "^4.0.0"
   }
 }
