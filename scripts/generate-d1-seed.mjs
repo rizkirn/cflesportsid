@@ -12,7 +12,7 @@ const files = async dir => (await readdir(new URL(dir + '/', DATA))).filter(x =>
 const insert = (table, columns, values) =>
   `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${values.join(', ')});`;
 
-const sql = ['PRAGMA foreign_keys = ON;', 'BEGIN TRANSACTION;'];
+const sql = [];
 const playerIds = new Set();
 
 for (const file of await files('teams')) {
@@ -107,7 +107,6 @@ for (const file of await files('teams')) {
     ['tournament_id','team_id','points','reason'],[q(p.tournamentId),q(teamId),n(p.points),q(p.reason)]));
 }
 
-sql.push('COMMIT;');
 await mkdir(OUT,{recursive:true});
 const output = new URL('seed-s1-s2.sql', OUT);
 await writeFile(output, sql.join('\n')+'\n');

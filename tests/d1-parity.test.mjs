@@ -28,9 +28,28 @@ function seed(data) {
 }
 function imported(data) {
   const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON;');
   db.exec(schema); db.exec(migration); db.exec(seed(data));
   return db;
 }
+
+test('seed imports inside a caller-owned transaction with immediate foreign key enforcement', () => {
+  const data = source(), sql = seed(data), db = new DatabaseSync(':memory:');
+  try {
+    assert.doesNotMatch(sql, /^\s*(?:BEGIN|COMMIT|END|ROLLBACK|SAVEPOINT|RELEASE|PRAGMA)\b/im);
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec(schema); db.exec(migration);
+    assert.equal(db.prepare('PRAGMA foreign_keys').get().foreign_keys, 1);
+    db.exec('BEGIN;');
+    db.exec(sql);
+    assert.deepEqual(compareStatistics(data, snapshot(db)).mismatches, []);
+    assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+    assert.throws(() => db.exec("INSERT INTO players (id, uid, name, current_ign, current_team_id) VALUES ('invalid', 'invalid', 'Invalid', 'Invalid', 'missing-team')"), /FOREIGN KEY constraint failed/);
+    db.exec('ROLLBACK;');
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM teams').get().n, 0);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM player_round_stats').get().n, 0);
+  } finally { db.close(); }
+});
 
 test('real seed matches every legacy statistic and all 127 registered players in all scopes', () => {
   const data = source(), db = imported(data);
