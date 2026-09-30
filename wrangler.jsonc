@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cflesportsid",
+  "compatibility_date": "2026-09-30",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cflesportsid",
+      "database_id": "local-placeholder",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
