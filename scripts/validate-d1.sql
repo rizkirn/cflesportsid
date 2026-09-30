@@ -1,4 +1,4 @@
--- Import integrity
+-- Import integrity.
 SELECT
   (SELECT COUNT(*) FROM tournaments) AS tournaments,
   (SELECT COUNT(*) FROM teams) AS teams,
@@ -6,43 +6,35 @@ SELECT
   (SELECT COUNT(*) FROM maps) AS maps,
   (SELECT COUNT(*) FROM matches) AS matches,
   (SELECT COUNT(*) FROM match_maps) AS match_maps,
-  (SELECT COUNT(*) FROM player_map_stats) AS player_map_stats;
+  (SELECT COUNT(*) FROM player_map_stats) AS player_map_stats,
+  (SELECT COUNT(*) FROM player_map_stats WHERE map_number IS NULL) AS unassigned_player_rounds;
 
--- Tournament totals.
-SELECT
-  m.tournament_id,
-  COUNT(DISTINCT m.id) AS completed_matches,
-  COUNT(DISTINCT mm.match_id || ':' || mm.map_number) AS maps,
-  COALESCE(SUM(s.kills), 0) AS kills,
-  COALESCE(SUM(s.deaths), 0) AS deaths,
-  COALESCE(SUM(s.assists), 0) AS assists
+-- Aggregate maps and combat separately so unassigned rounds survive and joins cannot multiply totals.
+SELECT m.tournament_id, COUNT(*) AS completed_matches,
+  SUM((SELECT COUNT(*) FROM match_maps mm WHERE mm.match_id = m.id)) AS maps,
+  SUM(COALESCE((SELECT SUM(s.kills) FROM player_map_stats s WHERE s.match_id = m.id), 0)) AS kills,
+  SUM(COALESCE((SELECT SUM(s.deaths) FROM player_map_stats s WHERE s.match_id = m.id), 0)) AS deaths,
+  SUM(COALESCE((SELECT SUM(s.assists) FROM player_map_stats s WHERE s.match_id = m.id), 0)) AS assists
 FROM matches m
-LEFT JOIN match_maps mm ON mm.match_id = m.id
-LEFT JOIN player_map_stats s
-  ON s.match_id = mm.match_id
- AND s.map_number = mm.map_number
 WHERE m.status = 'completed'
 GROUP BY m.tournament_id
 ORDER BY m.tournament_id;
 
--- Top career players. Mirrors statistics.ts for K/D/A, maps played and MVP.
-SELECT
-  p.id AS player_id,
-  p.current_ign,
+-- Filter before the outer join; otherwise live/upcoming combat leaks into career totals.
+WITH completed_stats AS (
+  SELECT s.* FROM player_map_stats s JOIN matches m ON m.id = s.match_id
+  WHERE m.status = 'completed'
+)
+SELECT p.id AS player_id, p.current_ign,
   COALESCE(SUM(s.kills), 0) AS kills,
   COALESCE(SUM(s.deaths), 0) AS deaths,
   COALESCE(SUM(s.assists), 0) AS assists,
-  COUNT(s.map_number) AS maps_played,
-  (
-    SELECT COUNT(*)
-    FROM match_maps mm2
-    JOIN matches m2 ON m2.id = mm2.match_id
-    WHERE m2.status = 'completed'
-      AND mm2.mvp_player_id = p.id
-  ) AS mvp_count
+  COUNT(s.match_id) AS maps_played,
+  COUNT(DISTINCT s.match_id) AS matches_played,
+  (SELECT COUNT(*) FROM match_maps mm JOIN matches m ON m.id = mm.match_id
+   WHERE m.status = 'completed' AND mm.mvp_player_id = p.id) AS mvp_count
 FROM players p
-LEFT JOIN player_map_stats s ON s.player_id = p.id
-LEFT JOIN matches m ON m.id = s.match_id AND m.status = 'completed'
+LEFT JOIN completed_stats s ON s.player_id = p.id
 GROUP BY p.id, p.current_ign
 ORDER BY kills DESC, deaths ASC
 LIMIT 20;

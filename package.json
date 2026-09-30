@@ -7,14 +7,15 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --experimental-sqlite --test tests/*.test.mjs",
     "data:check": "node scripts/check-data.mjs",
     "data:new-match": "node scripts/new-match.mjs",
     "build:check": "node scripts/check-build.mjs",
     "db:seed:generate": "node scripts/generate-d1-seed.mjs",
     "db:migrate:local": "wrangler d1 migrations apply cflesportsid --local",
     "db:seed:local": "wrangler d1 execute cflesportsid --local --file=.generated/seed-s1-s2.sql",
-    "db:validate": "wrangler d1 execute cflesportsid --local --file=scripts/validate-d1.sql"
+    "db:validate": "wrangler d1 execute cflesportsid --local --file=scripts/validate-d1.sql",
+    "db:parity": "node scripts/check-d1-parity.mjs"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.7.4",

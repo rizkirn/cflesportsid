@@ -45,3 +45,7 @@ Store images in `public/` and reference them with root-relative paths. Existing 
 ## Release status
 
 See [Step 15 checks](docs/release-checklist.md) for verification results and remaining work.
+
+## Local D1 parity
+
+Run `npm run db:parity` after applying local migrations. It compares all player, team, and map statistics against the legacy JSON calculation for each tournament and overall. See [local D1 parity](docs/d1-parity.md) for setup, migration behavior, and verified results.

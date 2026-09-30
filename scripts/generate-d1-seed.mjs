@@ -1,7 +1,6 @@
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename } from 'node:path';
 
-const ROOT = new URL('../', import.meta.url);
 const DATA = new URL('../src/data/', import.meta.url);
 const OUT = new URL('../.generated/', import.meta.url);
 
@@ -76,24 +75,28 @@ for (const {id,x} of matchRows) {
       [q(id),side,q(source.type),q(source.matchId),q(source.byeId)]));
   }
   for (const rd of x.roundDetails ?? []) {
-    const score = typeof rd.resultNote === 'string' && /^(\d+)\s*[-–]\s*(\d+)$/.test(rd.resultNote)
-      ? rd.resultNote.match(/^(\d+)\s*[-–]\s*(\d+)$/).slice(1).map(Number) : [null,null];
-    const mvp = rd.mvp && playerIds.has(String(rd.mvp)) ? String(rd.mvp) : null;
+    const mvp = rd.mvp ? String(rd.mvp) : null;
+    if (mvp && !playerIds.has(mvp)) throw new Error(`${id}: unknown MVP UID: ${mvp}`);
     const inferredWinner = x.status === 'completed'
       ? (rd.winnerId ?? (x.score1 > 0 && x.score2 === 0 ? x.team1Id : x.score2 > 0 && x.score1 === 0 ? x.team2Id : null))
       : null;
     sql.push(insert('match_maps',
       ['match_id','map_number','map_id','winner_team_id','score_team1','score_team2','mvp_player_id','result_note'],
-      [q(id),n(rd.round_number),q(rd.mapId),q(inferredWinner),n(score[0]),n(score[1]),q(mvp),q(rd.resultNote)]));
+      [q(id),n(rd.round_number),q(rd.mapId),q(inferredWinner),n(null),n(null),q(mvp),q(rd.resultNote)]));
   }
-  for (const ps of x.playerStats ?? []) {
-    for (const r of ps.rounds ?? []) {
-      if (r.round_number == null) continue; // preserve existing statistics.ts behavior: unassigned rows are not mapped to a map.
-      const pid = ps.uid && playerIds.has(String(ps.uid)) ? String(ps.uid) : null;
-      if (!pid) throw new Error(`${id}: unknown/missing player UID for map ${r.round_number}: ${ps.uid ?? ps.ign ?? 'unknown'}`);
-      sql.push(insert('player_map_stats',
-        ['match_id','map_number','player_id','team_id','uid_snapshot','ign_snapshot','kills','deaths','assists'],
-        [q(id),n(r.round_number),q(pid),q(ps.teamId),q(ps.uid),q(ps.ign),n(r.kills ?? 0),n(r.deaths ?? 0),n(r.assists ?? 0)]));
+  for (const [entryIndex, ps] of (x.playerStats ?? []).entries()) {
+    const pid = ps.uid ? String(ps.uid) : null;
+    if (pid && !playerIds.has(pid)) throw new Error(`${id}: unknown player UID: ${pid}`);
+    sql.push(insert('player_match_entries',
+      ['match_id','entry_index','player_id','team_id','uid_snapshot','ign_snapshot'],
+      [q(id),entryIndex,q(pid),q(ps.teamId),q(ps.uid),q(ps.ign)]));
+    for (const [roundIndex, r] of (ps.rounds ?? []).entries()) {
+      if (r.round_number != null && !(x.roundDetails ?? []).some(rd => rd.round_number === r.round_number)) {
+        throw new Error(`${id}: player ${pid ?? '(unknown)'} references missing map ${r.round_number}`);
+      }
+      sql.push(insert('player_round_stats',
+        ['match_id','entry_index','round_index','map_number','kills','deaths','assists'],
+        [q(id),entryIndex,roundIndex,n(r.round_number),n(r.kills ?? 0),n(r.deaths ?? 0),n(r.assists ?? 0)]));
     }
   }
 }
