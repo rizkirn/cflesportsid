@@ -1,6 +1,8 @@
 ---
 import { getFrontendMatches } from '../data-access/frontend-matches';
 export const prerender = false;
+
+import economySettings from '../data/veto/economy.json';
 import scrimSettings from '../data/veto/scrim.json';
 import { resolveVeto } from '../utils/veto';
 import Layout from '../layouts/Layout.astro';
@@ -34,6 +36,11 @@ for (const tournament of tournamentsMap.values()) {
 const scrimVeto = resolveVeto(
   scrimSettings as Parameters<typeof resolveVeto>[0],
   mapsMap
+);
+
+const economyVeto = resolveVeto(
+  economySettings as Parameters<typeof resolveVeto>[0],
+  new Map([...mapsMap].filter(([id]) => economySettings.mapIds.includes(id)))
 );
 
 const matchData = matches
@@ -87,6 +94,13 @@ const matchData = matches
       <p>Choose an upcoming match or enter teams for a scrim</p>
     </div>
 
+<div class="game-mode-field">
+      <label for="game-mode">Game mode</label>
+      <select id="game-mode">
+        <option value="sd">Search &amp; Destroy</option>
+        <option value="economy">S&amp;D Economy</option>
+      </select>
+    </div>
     <div class="veto-select-wrap">
       {
         matchData.length > 0 ? (
@@ -456,7 +470,12 @@ const matchData = matches
   set:html={JSON.stringify(scrimVeto).replace(/</g, '\\u003c')}
 />
 
+<script type="application/json" id="economy-data" set:html={JSON.stringify(economyVeto).replace(/</g, '\\u003c')} />
 <style is:global>
+  .game-mode-field { margin: 0 0 24px; }
+  .game-mode-field label { display: block; margin-bottom: 8px; }
+  .game-mode-field select { width: 100%; max-width: 320px; min-height: 48px; padding: 12px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); font: inherit; }
+
   /* ===== Core Layout & Select ===== */
 
   .veto-select-wrap {
@@ -1505,6 +1524,16 @@ const matchData = matches
     const $ = id => document.getElementById(id);
 
     function init() {
+      let selectedMode = $('game-mode').value;
+      $('game-mode').addEventListener('change', () => {
+        if (state.match && !window.confirm('Change game mode and reset the current veto?')) {
+          $('game-mode').value = selectedMode;
+          return;
+        }
+        selectedMode = $('game-mode').value;
+        resetVeto();
+        $('match-select').value = '';
+      });
       $('match-select').addEventListener(
         'change',
         onMatchSelect
@@ -1855,6 +1884,9 @@ const matchData = matches
     }
 
     function startSession(selected) {
+      if ($('game-mode').value === 'economy' && selected) {
+        selected = { ...selected, veto: JSON.parse($('economy-data').textContent) };
+      }
       resetVeto();
 
       const id = selected?.id;

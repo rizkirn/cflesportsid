@@ -1,4 +1,5 @@
 ---
+import economy from '../data/veto/economy.json';
 import Layout from '../layouts/Layout.astro';
 import '../styles/bracket-generator.css';
 import { getCollection } from 'astro:content';
@@ -11,6 +12,7 @@ const maps = (await getCollection('maps'))
 <Layout title="Map Randomizer - CFL Esports ID" current="Map Randomizer">
   <div
     class="container generator randomizer"
+    data-economy={JSON.stringify(economy.mapIds)}
     data-maps={JSON.stringify(maps.map(map => ({
       id: map.id,
       name: map.data.name
@@ -23,12 +25,19 @@ const maps = (await getCollection('maps'))
 
     <noscript>Enable JavaScript to randomize maps.</noscript>
 
+<div class="game-mode-field">
+      <label for="game-mode">Game mode</label>
+      <select id="game-mode">
+        <option value="sd">Search &amp; Destroy</option>
+        <option value="economy">S&amp;D Economy</option>
+      </select>
+    </div>
     <form id="randomizer-form">
       <h2>1. Match settings</h2>
 
       <div class="settings-row">
         <div class="round-field">
-          <label for="round-count">Rounds per match</label>
+          <label for="round-count">Maps per match</label>
           <input
             id="round-count"
             type="number"
@@ -54,7 +63,7 @@ const maps = (await getCollection('maps'))
       <p id="round-help">
         {
           maps.length
-            ? `Choose 1–${maps.length} rounds. Maps cannot repeat within a match.`
+            ? `Choose 1–${maps.length} maps. Maps cannot repeat within a match.`
             : 'No active maps available.'
         }
       </p>
@@ -116,7 +125,7 @@ const maps = (await getCollection('maps'))
   import { randomizeMaps } from '../utils/map-randomizer';
 
   const root = document.querySelector<HTMLElement>('.randomizer')!;
-  const maps: { id: string; name: string }[] = JSON.parse(root.dataset.maps!);
+  let maps: { id: string; name: string }[] = JSON.parse(root.dataset.maps!);
 
   const form = document.querySelector<HTMLFormElement>('#randomizer-form')!;
   const count = document.querySelector<HTMLInputElement>('#round-count')!;
@@ -154,6 +163,38 @@ const maps = (await getCollection('maps'))
     copyButton.textContent = 'Copy results';
   };
 
+  const allMaps = [...maps];
+  const economyIds: string[] = JSON.parse(root.dataset.economy!);
+  const mode = document.querySelector<HTMLSelectElement>('#game-mode')!;
+  let selectedMode = mode.value;
+  mode.addEventListener('change', () => {
+    if (drawing || (copyText && !window.confirm('Change game mode and clear the current map results?'))) {
+      mode.value = selectedMode;
+      return;
+    }
+    selectedMode = mode.value;
+    maps = allMaps.filter(map => selectedMode === 'sd' || economyIds.includes(map.id));
+    generation++;
+    resetCopy();
+    copyText = '';
+    results.replaceChildren();
+    draw.hidden = true;
+    manual.hidden = true;
+    copyStatus.textContent = '';
+    drawStatus.textContent = 'Ready to draw.';
+    initialDraw.hidden = false;
+    initialDraw.disabled = !maps.length;
+    count.max = String(maps.length);
+    count.value = String(Math.max(1, Math.min(Number(count.value) || 3, maps.length)));
+    document.querySelector('#round-help')!.textContent = `Choose 1–${maps.length} maps. Maps cannot repeat within a match.`;
+    document.querySelector('#pool-heading')!.textContent = `Available maps (${maps.length})`;
+    cards.forEach(card => {
+      card.hidden = !maps.some(map => map.id === card.dataset.mapId);
+      card.classList.remove('is-selected', 'is-highlighted');
+      card.querySelector('.selection-label')!.textContent = '';
+    });
+  });
+
   form.addEventListener('submit', async event => {
     event.preventDefault();
 
@@ -171,6 +212,7 @@ const maps = (await getCollection('maps'))
     });
 
     count.disabled = true;
+    mode.disabled = true;
     pool.setAttribute('aria-busy', 'true');
 
     results.replaceChildren();
@@ -200,7 +242,7 @@ const maps = (await getCollection('maps'))
     try {
       for (const [index, map] of selected.entries()) {
         const available = cards.filter(
-          card => !card.classList.contains('is-selected')
+          card => !card.hidden && !card.classList.contains('is-selected')
         );
 
         const winner = available.find(
@@ -237,13 +279,13 @@ const maps = (await getCollection('maps'))
           winner.querySelector<HTMLElement>('.selection-label');
 
         if (selectionLabel) {
-          selectionLabel.textContent = `Round ${index + 1}`;
+          selectionLabel.textContent = `Map ${index + 1}`;
         }
 
         const item = document.createElement('li');
 
         const label = document.createElement('span');
-        label.textContent = `Round ${index + 1}`;
+        label.textContent = `Map ${index + 1}`;
 
         const name = document.createElement('strong');
         name.textContent = map.name;
@@ -263,6 +305,7 @@ const maps = (await getCollection('maps'))
       });
 
       count.disabled = false;
+      mode.disabled = false;
       pool.setAttribute('aria-busy', 'false');
 
       cards.forEach(card =>
@@ -276,7 +319,7 @@ const maps = (await getCollection('maps'))
     copyText = [
       'Map draw',
       ...selected.map(
-        (map, index) => `Round ${index + 1}: ${map.name}`
+        (map, index) => `Map ${index + 1}: ${map.name}`
       )
     ].join('\n');
 
@@ -329,6 +372,10 @@ const maps = (await getCollection('maps'))
 </script>
 
 <style>
+  .game-mode-field { margin: 0 0 24px; }
+  .game-mode-field label { display: block; margin-bottom: 8px; }
+  .game-mode-field select { width: 100%; max-width: 320px; min-height: 48px; padding: 12px; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border); font: inherit; }
+
   /* -----------------------------
      Match settings
   ----------------------------- */

@@ -1,0 +1,39 @@
+{
+  "mapIds": [
+    "greece",
+    "satellite",
+    "island",
+    "eagle-eye",
+    "black-widow",
+    "desert",
+    "power-supply",
+    "ankara"
+  ],
+  "series": {
+    "type": "fixed-maps",
+    "mapCount": 3
+  },
+  "veto": {
+    "steps": [
+      {
+        "team": "A",
+        "action": "ban"
+      },
+      {
+        "team": "B",
+        "action": "ban"
+      },
+      {
+        "team": "A",
+        "action": "pick"
+      },
+      {
+        "team": "B",
+        "action": "pick"
+      }
+    ],
+    "finalMap": "random",
+    "actionSeconds": 20,
+    "reserveSeconds": 90
+  }
+}
