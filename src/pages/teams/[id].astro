@@ -1,5 +1,6 @@
 ---
 import { getFrontendMatches } from '../../data-access/frontend-matches';
+import { getFrontendTeams } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import { getOverallStandings } from '../../utils/standings';
 import Layout from '../../layouts/Layout.astro';
@@ -14,9 +15,9 @@ import {
   getMatchWinnerId,
 } from '../../utils/content';
 
-const team = (await getCollection('teams')).find(entry => entry.id === Astro.params.id);
+const team = (await getFrontendTeams()).find(entry => entry.id === Astro.params.id);
 if (!team) return new Response(null, { status: 404 });
-const allTeams = await getCollection('teams');
+const allTeams = await getFrontendTeams();
 const allPlayers = await getCollection('players');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
 const playersMap = new Map(allPlayers.map(p => [p.id, p]));

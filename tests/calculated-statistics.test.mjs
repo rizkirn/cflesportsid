@@ -8,6 +8,13 @@ const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKi
 const context = { exports: {} }; vm.runInNewContext(code, context);
 const { calculateStatistics, emptyStats, kdRatio, kdaRatio, getMapWinner } = context.exports;
 const stats = (kills, deaths, assists, round_number) => ({ kills, deaths, assists, ...(round_number ? { round_number } : {}) });
+
+test('a confirmed series without details adds no player or map statistics', () => {
+  const result = calculateStatistics([{ id:'live-only', data:{status:'completed',team1Id:'a',team2Id:'b',winnerId:'a',score1:2,score2:1,roundDetails:[],playerStats:[]} }]);
+  assert.equal(result.players.size,0);assert.equal(result.maps.size,0);
+  assert.equal(result.totals.mapsPlayed,0);assert.equal(result.totals.kills,0);
+  assert.equal(result.teams.get('a').wins,1);assert.equal(result.teams.get('a').mapsPlayed,0);
+});
 const fixture = () => ({ id: 'test', data: {
   status: 'completed', team1Id: 'a', team2Id: 'b', winnerId: 'a',
   roundDetails: [{ round_number: 1, mapId: 'desert', mvp: 'p1' }, { round_number: 2, mapId: 'port' }, { round_number: 3, mapId: 'desert' }],

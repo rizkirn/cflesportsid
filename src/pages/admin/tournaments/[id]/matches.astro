@@ -30,7 +30,7 @@ const label = (match,side) => match[`team${side}_name`] ?? (match[`source${side}
 ---
 <AdminLayout title="Matches" workspace={workspace}>
   {failed ? <p class="admin-error" role="alert">Could not load matches. Check staging and reload.</p> : !tournament ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{tournament.name}</h1><p>Matches</p></div><a href={`/admin/tournaments/${tournament.id}/bracket`}>Back to Bracket Setup</a></header>
-    {matches.length ? <><p class="admin-help">Official bracket saved. Setup, Participants and Roster are locked. This list is read-only; scheduling and results editing are not available yet.</p><ul class="admin-list">{matches.map(match=><li><div><h2>{match.round_name} · Slot {match.bracket_slot}</h2><p>{label(match,1)} vs {label(match,2)}</p></div><div class="admin-row-end"><span>{match.status}</span><span>{match.date}</span></div></li>)}</ul></> : <section class="admin-empty"><h2>No matches yet</h2><p>Confirm the final draw in Bracket Setup to create matches.</p></section>}
+    <header class="admin-heading"><div><h1>{tournament.name}</h1><p>Matches</p></div><a href={`/admin/tournaments/${tournament.id}/bracket`}>Open Bracket</a></header>
+    {matches.length ? <><p class="admin-help">Official bracket saved. Setup, Participants and Roster are locked. Update live scores and confirm results in Bracket. Scheduling and detailed stats entry are later work.</p><ul class="admin-list">{matches.map(match=><li><div><h2>{match.round_name} · Slot {match.bracket_slot}</h2><p>{label(match,1)} vs {label(match,2)}</p></div><div class="admin-row-end"><span>{match.score1}–{match.score2} · {match.status}</span><span>{match.date}</span></div></li>)}</ul></> : <section class="admin-empty"><h2>No matches yet</h2><p>Confirm the final draw in Bracket Setup to create matches.</p></section>}
   </>}
 </AdminLayout>

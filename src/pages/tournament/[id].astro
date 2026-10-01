@@ -1,17 +1,18 @@
 ---
 import { getFrontendMatches } from '../../data-access/frontend-matches';
+import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { calculateStatistics } from '../../utils/statistics';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { getParticipantLabel, getSourceNode, resolveSourceTeam, validateTournament } from '../../utils/tournament';
 
-const tournament = (await getCollection('tournaments')).find(entry => entry.id === Astro.params.id);
+const tournament = (await getFrontendTournaments()).find(entry => entry.id === Astro.params.id);
 if (!tournament) return new Response(null, { status: 404 });
 const tournamentName = tournament.data.name;
 const matches = await getFrontendMatches();
-const teamsMap = new Map((await getCollection('teams')).map(t => [t.id, t]));
-validateTournament(tournament, matches, new Set(teamsMap.keys()));
+const teamsMap = new Map((await getFrontendTeams()).map(t => [t.id, t]));
+validateTournament(tournament, matches, new Set(teamsMap.keys()), { allowPendingDetails: !['clash-for-glory-s1','clash-for-glory-s2'].includes(tournament.id) });
 const tMatches = matches.filter(m => m.data.tournamentId === tournament.id);
 const totalKills = calculateStatistics(tMatches).totals.kills;
 const winner = tournament.data.winner ? teamsMap.get(tournament.data.winner) : undefined;
@@ -188,7 +189,7 @@ function bracketRow(slot: number, roundIndex: number) {
                             )}
                             <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
                           </div>
-                          <span class="bracket-team-score">{complete ? m.data.score1 : '–'}</span>
+                          <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
                         </div>
                         <div class={`bracket-team-row ${win2 ? 'winner' : win1 ? 'loser' : ''}`} style={`--team-color:${team2?.data.color || '#777B82'};`}>
                           <div class="bracket-team-info">
@@ -203,7 +204,7 @@ function bracketRow(slot: number, roundIndex: number) {
                             )}
                             <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
                           </div>
-                          <span class="bracket-team-score">{complete ? m.data.score2 : '–'}</span>
+                          <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
                         </div>
                       </a>
                     );
@@ -246,7 +247,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 )}
                                 <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
                               </div>
-                              <span class="bracket-team-score">{complete ? m.data.score1 : '–'}</span>
+                              <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
                             </div>
 
                             <div class={`bracket-team-row ${win2 ? 'winner' : win1 ? 'loser' : ''}`} style={`--team-color:${team2?.data.color || '#777B82'};`}>
@@ -262,7 +263,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 )}
                                 <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
                               </div>
-                              <span class="bracket-team-score">{complete ? m.data.score2 : '–'}</span>
+                              <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
                             </div>
                           </a>
                         );

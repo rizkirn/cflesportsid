@@ -7,6 +7,12 @@
 .admin-button:hover { background: var(--accent-hover); color: #171918; }
 .admin-button:disabled { cursor: wait; }
 .admin-submit-status:empty { margin: 0; }
+.live-slots { min-width: 0; }
+.live-score-form { display: grid; gap: .75rem; }
+.live-score-form label { display: grid; grid-template-columns: minmax(0, 1fr) 4.5rem; align-items: center; gap: .75rem; }
+.live-score-form label span { overflow-wrap: anywhere; }
+.live-score-form input { min-width: 0; width: 100%; min-height: 44px; padding: .5rem; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--text-secondary); border-radius: var(--radius); font: inherit; color-scheme: dark; }
+.live-slots li { overflow-wrap: anywhere; }
 .admin-page a:not(.admin-button) { display: inline-flex; align-items: center; min-height: 44px; }
 .admin-page :is(a, button, input):focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 4px; }
 .admin-empty, .admin-next { padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); }

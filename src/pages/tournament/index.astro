@@ -1,5 +1,6 @@
 ---
 import { getFrontendMatches } from '../../data-access/frontend-matches';
+import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
@@ -10,8 +11,8 @@ import {
 } from '../../utils/content';
 
 const matches = await getFrontendMatches();
-const teams = await getCollection('teams');
-const allTournaments = await getCollection('tournaments');
+const teams = await getFrontendTeams();
+const allTournaments = await getFrontendTournaments();
 
 const tournamentPosters: Record<string, string> = {
   'clash-for-glory-s1': '/tournaments/clash-for-glory-s1.webp',

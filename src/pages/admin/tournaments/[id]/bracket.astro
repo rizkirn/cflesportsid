@@ -4,19 +4,24 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
 import { readBracketState, readBracketForm, officialDraw, confirmOfficialBracket } from '../../../../admin/bracket.mjs';
+import { readLiveResults, saveLiveResult, seriesWinner } from '../../../../admin/live-results.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let state; let preview; let message = ''; let failed = false; let drawCount = '1';
+let state; let live; let preview; let message = ''; let failed = false; let drawCount = '1';
 const secret = (env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
 try {
   state = await readBracketState(db, Astro.params.id);
+  if (state) live = await readLiveResults(db, state.tournament.id);
   if (!state) Astro.response.status = 404;
   if (state && Astro.request.method === 'POST') {
     const form = await readBracketForm(Astro.request);
     drawCount = form.draw_count ?? '1';
-    if (form.intent === 'draw') preview = await officialDraw(state, form, secret);
+    if (form.intent === 'save-score' || form.intent === 'confirm-result') {
+      await saveLiveResult(db, state.tournament.id, form);
+      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
+    } else if (form.intent === 'draw') preview = await officialDraw(state, form, secret);
     else if (form.intent === 'confirm') {
       await confirmOfficialBracket(db, state.tournament.id, form, secret);
-      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/matches`, 303);
+      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
     } else throw new AdminError('Unknown bracket action.');
   }
 } catch (error) {
@@ -26,12 +31,51 @@ try {
 const teamName = (id?: string) => state?.participants.find(team => team.id === id)?.name ?? id;
 const enough = state && state.stage && state.participants.length >= Math.max(2, state.stage[3] / 2) && state.participants.length <= state.stage[3];
 ---
-<AdminLayout title="Bracket Setup" workspace={state}>
+<AdminLayout title="Bracket" workspace={state}>
   {message && <p role="alert" class="admin-error">{message}</p>}
   {!failed && (!state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Back to Roster</a></header>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Back to Roster</a></header>
     <p class="admin-help">{state.participants.length} teams · {state.stage?.[3] ?? 0} slots · {(state.stage?.[3] ?? 0) - state.participants.length} BYEs</p>
-    {state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup, Participants and Roster are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !state.ready ? <section class="admin-next"><h2>Setup required</h2><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Complete Setup</a></section> : !state.roster.ready ? <section class="admin-next"><h2>Roster incomplete</h2><p>Every participant needs 5 to 7 players with a saved tournament IGN before Official Draw.</p><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Complete Tournament Roster</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
+    {live?.matches.length ? <section aria-labelledby="live-results-heading">
+      <h2 id="live-results-heading">Live bracket results</h2>
+      <p class="admin-help">Save Score publishes the series score. Confirm Result advances the winner and any loser source. Setup, Participants and Roster remain read-only.</p>
+      <p class="admin-help">Confirmed results are read-only. Corrections require a later explicit admin action.</p>
+      <div class="official-rounds" style={`--official-round-count:${state.options?.stage.rounds.length ?? 1}`}>
+        {state.options?.stage.rounds.map(round => <section><h3>{round.name}</h3>
+          <ol class="official-slots live-slots">
+            {JSON.parse(live!.snapshot).byes.filter((b: string[]) => b[0] === state!.stage?.[0] && b[3] === round.id).map((b: string[]) => <li><strong>BYE · {teamName(b[2])}</strong><span>Advances automatically</span></li>)}
+            {live!.matches.filter(m => m.round_id === round.id).map(m => {
+              const locked = live!.historical || m.status === 'completed' || Boolean(m.winner_id) || state!.tournament.status === 'completed' || Boolean(JSON.parse(live!.snapshot).tournament?.[1]);
+              const resolved = Boolean(m.team1_id && m.team2_id);
+              const winnerSide = seriesWinner(m.score1,m.score2,m.series_type,m.map_count);
+              const sourceLabel = (side: number) => {
+                const source = JSON.parse(live!.snapshot).sources.find((s: unknown[]) => s[0] === m.id && s[1] === side);
+                const parent = live!.matches.find(match => match.id === source?.[3]);
+                return source ? `${source[2] === 'loser' ? 'Loser' : 'Winner'} of ${parent ? `${parent.round_name} · Match ${parent.bracket_slot}` : source[4]}` : 'TBD';
+              };
+              return <li data-live-match={m.id}>
+                <strong>Match {m.bracket_slot} · {m.status === 'completed' ? 'Result confirmed' : m.status}</strong>
+                <span>{m.map_count} fixed maps · {m.detail_maps || m.detail_rounds ? 'Details entered' : 'Details not entered'}</span>
+                {locked || !resolved ? <><span>{teamName(m.team1_id ?? undefined) ?? sourceLabel(1)} · {m.score1}</span><span>{teamName(m.team2_id ?? undefined) ?? sourceLabel(2)} · {m.score2}</span>{m.winner_id && <span>Winner: {teamName(m.winner_id)}</span>}{!resolved && <span>Waiting for feeder results</span>}</> : <>
+                  <form method="POST" class="live-score-form" data-live-form>
+                    <input type="hidden" name="intent" value="save-score" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
+                    <label for={`${m.id}-score1`}><span>{teamName(m.team1_id ?? undefined)}</span><input id={`${m.id}-score1`} name="score1" type="number" min="0" max={m.map_count} step="1" value={m.score1} required inputmode="numeric" /></label>
+                    <label for={`${m.id}-score2`}><span>{teamName(m.team2_id ?? undefined)}</span><input id={`${m.id}-score2`} name="score2" type="number" min="0" max={m.map_count} step="1" value={m.score2} required inputmode="numeric" /></label>
+                    <button class="admin-button" type="submit">Save Score</button><p class="admin-submit-status" role="status"></p>
+                  </form>
+                  {winnerSide ? <form method="POST" data-live-form>
+                    <input type="hidden" name="intent" value="confirm-result" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
+                    <p>Saved result: {m.score1}–{m.score2} · Winner: {teamName(winnerSide === 1 ? m.team1_id! : m.team2_id!)}</p>
+                    <button class="admin-button" type="submit">Confirm Result</button><p class="admin-submit-status" role="status"></p>
+                  </form> : <span>Save a winning score before confirming.</span>}
+                </>}
+                <a href={`/matches/${m.id}`}>View public match</a>
+              </li>;
+            })}
+          </ol>
+        </section>)}
+      </div>
+    </section> : state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup, Participants and Roster are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !state.ready ? <section class="admin-next"><h2>Setup required</h2><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Complete Setup</a></section> : !state.roster.ready ? <section class="admin-next"><h2>Roster incomplete</h2><p>Every participant needs 5 to 7 players with a saved tournament IGN before Official Draw.</p><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Complete Tournament Roster</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
       <form method="POST" class="admin-form" data-bracket-form>
         <input type="hidden" name="revision" value={state.revision} />
         <input type="hidden" name="intent" value="draw" />
@@ -67,6 +111,29 @@ const enough = state && state.stage && state.participants.length >= Math.max(2, 
   </>)}
 </AdminLayout>
 <script>
+  document.querySelectorAll<HTMLElement>('[data-live-match]').forEach(row => {
+    const scoreForm = row.querySelector<HTMLFormElement>('.live-score-form');
+    const confirmForm = row.querySelector<HTMLFormElement>('form:has([value="confirm-result"])');
+    scoreForm?.addEventListener('input', () => {
+      const button = confirmForm?.querySelector<HTMLButtonElement>('button');
+      if (button) button.disabled = true;
+      const status = confirmForm?.querySelector('[role="status"]');
+      if (status) status.textContent = 'Save score changes before confirming.';
+    });
+  });
+  document.querySelectorAll<HTMLFormElement>('[data-live-form]').forEach(form => {
+    let pending = false;
+    const button = form.querySelector<HTMLButtonElement>('button');
+    const status = form.querySelector('[role="status"]');
+    form.addEventListener('submit', event => {
+      if (pending) { event.preventDefault(); return; }
+      if (event.defaultPrevented) return;
+      pending = true; form.setAttribute('aria-busy','true');
+      if (button) button.disabled = true;
+      if (status) status.textContent = 'Saving result…';
+    });
+    window.addEventListener('pageshow', () => { pending=false; form.removeAttribute('aria-busy'); if(button)button.disabled=false; if(status)status.textContent=''; });
+  });
   const history = Array.from(document.querySelectorAll<HTMLDetailsElement>('[name="official-draw-history"]'));
   const confirmation = document.querySelector<HTMLFormElement>('[data-confirm-form]');
   history.forEach(draw => draw.addEventListener('toggle', () => {

@@ -1,5 +1,6 @@
 ---
 import { getFrontendMatches } from '../../data-access/frontend-matches';
+import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
@@ -18,9 +19,9 @@ const match = (await getFrontendMatches()).find(entry => entry.id === Astro.para
 if (!match) return new Response(null, { status: 404 });
 const m = match;
 
-const allTeams = await getCollection('teams');
+const allTeams = await getFrontendTeams();
 const allPlayers = await getCollection('players');
-const allTournaments = await getCollection('tournaments');
+const allTournaments = await getFrontendTournaments();
 const allMaps = await getCollection('maps');
 
 const teamsMap = new Map(
@@ -282,7 +283,7 @@ const roundMVPs =
 
         <div class="match-detail-score">
           {
-            m.data.status === 'completed'
+            m.data.status === 'completed' || m.data.status === 'live'
               ? `${m.data.score1} - ${m.data.score2}`
               : 'VS'
           }
@@ -1063,7 +1064,9 @@ const roundMVPs =
     }
 
     {
-      m.data.status !== 'completed' && (
+      roundDetails.length === 0 && playerStats.length === 0 ? (
+        <div class="empty-state">Match details are not available yet.</div>
+      ) : m.data.status !== 'completed' && (
         <div class="empty-state">
           Match stats will be available after the
           match is completed.

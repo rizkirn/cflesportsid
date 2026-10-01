@@ -43,7 +43,7 @@ export function resolveSourceTeam(match: Match, side: 1 | 2, tournament: Tournam
 }
 
 // Called while generating tournament routes: invalid bracket data stops the build.
-export function validateTournament(tournament: Tournament, allMatches: Match[], teamIds: Set<string>) {
+export function validateTournament(tournament: Tournament, allMatches: Match[], teamIds: Set<string>, options: { allowPendingDetails?: boolean } = {}) {
   const fail = (message: string): never => { throw new Error(`${tournament.id}: ${message}`); };
   const matches = allMatches.filter(match => match.data.tournamentId === tournament.id);
   const matchMap = new Map(allMatches.map(match => [match.id, match]));
@@ -131,8 +131,8 @@ export function validateTournament(tournament: Tournament, allMatches: Match[], 
         if (m.score1 + m.score2 !== stage.series.mapCount || m.score1 === m.score2) fail(`${match.id}: completed scores must total ${stage.series.mapCount} maps`);
         if (m.winnerId !== (m.score1 > m.score2 ? m.team1Id : m.team2Id)) fail(`${match.id}: winner disagrees with score`);
         const numbers = new Set(m.roundDetails.map(r => r.round_number));
-        if (m.roundDetails.length !== stage.series.mapCount || numbers.size !== stage.series.mapCount ||
-            [...numbers].some(n => !Number.isInteger(n) || n < 1 || n > stage.series.mapCount)) fail(`${match.id}: record all ${stage.series.mapCount} maps`);
+        if (!options.allowPendingDetails && (m.roundDetails.length !== stage.series.mapCount || numbers.size !== stage.series.mapCount ||
+            [...numbers].some(n => !Number.isInteger(n) || n < 1 || n > stage.series.mapCount))) fail(`${match.id}: record all ${stage.series.mapCount} maps`);
       } else if (m.winnerId || m.score1 + m.score2 > stage.series.mapCount) {
         fail(`${match.id}: invalid unfinished result`);
       }

@@ -85,5 +85,11 @@ checks generator controls and production admin denial. Historical pages use
 pristine `a91700d`; map-randomizer/veto compare against pristine `cdb6c18`, which
 contains their existing economy controls. Both reference builds are generated
 locally by the suite. It does not change source data or remote databases.
-Scheduling/results editing, stored draw history and bracket reset remain later
-work. See `docs/admin-bracket.md` for official draw semantics.
+Live series scoring and explicit result confirmation are available in Bracket.
+Scheduling, detailed stats editing, stored draw history and bracket reset remain
+later work. See `docs/admin-bracket.md` for official draw and progression semantics.
+Run `ADMIN_TEST_URL=http://127.0.0.1:4321 ADMIN_TEST_LOCAL=1 node tests/admin-live-results.integration.mjs`
+against the same isolated seeded server for Phase A HTTP checks. This verifies
+score reloads, public D1 reads without building, empty-detail live/completed match
+routes, result locks and final/bronze resolution. Existing admin regressions still
+cover official generation and preparation locks.
