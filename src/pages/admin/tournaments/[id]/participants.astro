@@ -2,23 +2,103 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { requireLocalAdmin } from '../../../../admin/tournaments.mjs';
-import { readSetup, readParticipants } from '../../../../admin/setup.mjs';
+import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import { readParticipantState, participantForm, readParticipantForm, editParticipantForm, saveParticipants } from '../../../../admin/participants.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let setup; let participants = []; let failed = false;
+let state; let values; let errorMessage = ''; let notice = '';
 try {
-  setup = await readSetup(db, Astro.params.id);
-  if (!setup) Astro.response.status = 404;
-  else if (!setup.state.stages.length) return Astro.redirect(`/admin/tournaments/${setup.tournament.id}/setup`, 303);
-  else participants = await readParticipants(db, setup.tournament.id);
-} catch (error) { console.error('[admin] Participants failed', error); failed = true; Astro.response.status = 503; }
+  state = await readParticipantState(db, Astro.params.id);
+  if (!state) Astro.response.status = 404;
+  else {
+    if (!state.stage && Astro.request.method !== 'POST') return Astro.redirect(`/admin/tournaments/${state.tournament.id}/setup`, 303);
+    values = participantForm(state);
+    if (Astro.request.method === 'POST') {
+      values = await readParticipantForm(Astro.request);
+      if (values.remove_participant !== undefined || values.intent !== 'save') {
+        await editParticipantForm(values, state);
+        notice = 'Participant list updated. Save & Continue to save these changes.';
+      } else {
+        if (values.team_id || values.new_name.trim() || values.new_tag.trim() || values.new_region !== 'ID') throw new AdminError('Add the selected or new team to the list before saving.');
+        await saveParticipants(db, state.tournament.id, values);
+        return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
+      }
+    }
+  }
+} catch (error) {
+  if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
+  else { console.error('[admin] Participants failed', error); errorMessage = 'Could not load or save participants. Check staging and try again.'; Astro.response.status = 503; }
+}
+const editable = state?.ready && !state.locked;
+const rows = values?.participants.map(row => row.id ? state?.teams.find(team => team.id === row.id) ?? row : row) ?? [];
+const available = state?.teams.filter(team => !rows.some(row => row.id === team.id)) ?? [];
 ---
 <AdminLayout title="Participants">
-  {failed ? <p role="alert" class="admin-error">Could not load participants. Check staging and reload.</p> : !setup ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{setup.tournament.name}</h1><p>Participants</p></div><a href={`/admin/tournaments/${setup.tournament.id}/setup`}>Tournament Setup</a></header>
-    <section class="admin-next"><h2>Setup saved</h2><p>{setup.state.stages[0][1]} · {setup.state.stages[0][3]} slots · {setup.state.stages[0][5]} maps per match</p><p>Participant selection and bracket generation are the next workflow.</p></section>
-    <h2 class="setup-participants">Registered teams</h2>
-    {participants.length ? <ul class="admin-list">{participants.map(team => <li><span>{team.name} ({team.tag})</span></li>)}</ul> : <p class="admin-empty">No teams are registered for this tournament.</p>}
-    <a href="/admin">Back to tournaments</a>
+  {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
+  {!state || !values ? <><h1>Participants unavailable</h1><a href="/admin">Back to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Participants</p></div><span class="participant-counter">{rows.length} / {state.stage?.[3] ?? 0} teams</span></header>
+    {!editable && <p class="admin-next">Participants are read-only. Finish a single-stage setup first; teams cannot change once the tournament starts or matches or byes exist.</p>}
+    <form method="post" action={`/admin/tournaments/${state.tournament.id}/participants`} class="admin-form participant-form">
+      <input type="hidden" name="revision" value={values.revision} />
+      {editable && <div class="admin-actions participant-save-top"><button class="admin-button" type="submit" data-save>Save &amp; Continue</button></div>}
+      <p class="admin-help">Add or remove teams, then Save &amp; Continue to save the list. New teams are created when you save. Empty slots remain available for BYE placement in Bracket Setup.</p>
+      {notice && <p role="status" class="participant-notice">{notice}</p>}
+      <section aria-labelledby="selected-teams"><h2 id="selected-teams">Participant list</h2>
+        {rows.length ? <ul class="admin-list participant-list">{rows.map((team,index) => <li>
+          <div><strong>{team.name || team.id}</strong><p>{team.tag} · {team.region}{!team.id && ' · New team, not saved yet'}</p>
+            {['id','name','tag','region'].map(key => <input type="hidden" name={`participants.${index}.${key}`} value={team[key as keyof typeof team]} />)}
+          </div>
+          {editable && <button class="admin-outline" type="submit" name="remove_participant" value={index} formnovalidate aria-label={`Remove ${team.name || team.id}`}>Remove</button>}
+        </li>)}</ul> : <p class="admin-empty">No teams selected. Add existing teams or create a new team below.</p>}
+      </section>
+      {editable && <section class="participant-add" aria-labelledby="add-team"><h2 id="add-team">Add Team</h2>
+        {rows.length >= (state.stage?.[3] ?? 0) ? <p class="admin-help">All bracket slots are filled. Remove a participant to add another team.</p> : <>
+          {available.length ? <>
+            <label class="participant-search" hidden for="team-search">Search existing teams</label><input class="participant-search" hidden id="team-search" type="search" autocomplete="off" aria-controls="team_id" />
+            <label for="team_id">Existing team</label><select id="team_id" name="team_id"><option value="">Select a team</option>{available.map(team => <option value={team.id} selected={values.team_id === team.id}>{team.name} ({team.tag}) · {team.region}</option>)}</select>
+            <p class="admin-help" data-search-status role="status"></p>
+            <button class="admin-outline" type="submit" name="intent" value="add-existing" formnovalidate>Add selected team</button>
+          </> : <p class="admin-help">No other existing teams are available. Create a new team below.</p>}
+          <details class="participant-create" open={!!values.new_name || !!values.new_tag || values.intent === 'add-new'}><summary>Create New Team</summary>
+            <div class="setup-grid"><div><label for="new_name">Team name</label><input id="new_name" name="new_name" value={values.new_name} maxlength="120" /></div><div><label for="new_tag">Team tag</label><input id="new_tag" name="new_tag" value={values.new_tag} maxlength="20" /></div><div><label for="new_region">Region</label><input id="new_region" name="new_region" value={values.new_region} maxlength="32" /></div></div>
+            <p class="admin-help">Enter a name, tag, and region. This step adds a team only; roster and players are managed separately.</p>
+            <button class="admin-outline" type="submit" name="intent" value="add-new" formnovalidate>Add new team</button>
+          </details>
+        </>}
+      </section>}
+      <div class="admin-actions">{editable && <button class="admin-button" type="submit" data-save>Save &amp; Continue</button>}<a href={`/admin/tournaments/${state.tournament.id}/setup`}>Back to Setup</a>{!editable && state.participants.length >= 2 && <a href={`/admin/tournaments/${state.tournament.id}/bracket`}>Bracket Setup</a>}</div>
+      <p class="admin-submit-status admin-help" role="status" aria-live="polite" aria-atomic="true"></p>
+    </form>
   </>}
 </AdminLayout>
+<script>
+  const form = document.querySelector<HTMLFormElement>('.participant-form');
+  const buttons = form ? Array.from(form.querySelectorAll<HTMLButtonElement>('[data-save]')) : [];
+  const status = form?.querySelector<HTMLElement>('.admin-submit-status');
+  if (form && buttons.length && status) {
+    let submitting = false;
+    form.addEventListener('submit', event => {
+      if (event.defaultPrevented) return;
+      if (submitting) { event.preventDefault(); return; }
+      submitting = true; form.setAttribute('aria-busy', 'true');
+      const saving = buttons.includes(event.submitter as HTMLButtonElement);
+      buttons.forEach(button => { button.disabled = true; if (saving) button.textContent = 'Saving Participants...'; });
+      status.textContent = saving ? 'Saving participants. Please wait.' : 'Updating participant list. Please wait.';
+    });
+    window.addEventListener('pageshow', () => { submitting = false; form.removeAttribute('aria-busy'); buttons.forEach(button => { button.disabled = false; button.textContent = 'Save & Continue'; }); status.textContent = ''; });
+  }
+  const search = document.querySelector<HTMLInputElement>('#team-search');
+  const select = document.querySelector<HTMLSelectElement>('#team_id');
+  const searchStatus = document.querySelector<HTMLElement>('[data-search-status]');
+  if (search && select && searchStatus) {
+    document.querySelectorAll<HTMLElement>('.participant-search').forEach(element => { element.hidden = false; });
+    const options = Array.from(select.options).slice(1).map(option => ({ value: option.value, text: option.text }));
+    search.addEventListener('input', () => {
+      const selected = select.value; const query = search.value.normalize('NFKC').trim().toLowerCase();
+      const matches = options.filter(option => option.text.normalize('NFKC').toLowerCase().includes(query));
+      select.replaceChildren(new Option('Select a team', ''), ...matches.map(option => new Option(option.text, option.value)));
+      if (matches.some(option => option.value === selected)) select.value = selected;
+      searchStatus.textContent = matches.length ? `${matches.length} teams available.` : 'No matching teams. Try another search or create a new team.';
+    });
+    search.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); select.focus(); } });
+  }
+</script>

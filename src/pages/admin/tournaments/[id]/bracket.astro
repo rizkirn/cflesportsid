@@ -1,0 +1,23 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import { readParticipantState } from '../../../../admin/participants.mjs';
+const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
+let state; let failed = false;
+try {
+  state = await readParticipantState(db, Astro.params.id);
+  if (!state) Astro.response.status = 404;
+  else if (!state.ready) return Astro.redirect(`/admin/tournaments/${state.tournament.id}/setup`, 303);
+  else if (state.participants.length < 2 || state.participants.length > state.stage![3]) return Astro.redirect(`/admin/tournaments/${state.tournament.id}/participants`, 303);
+} catch (error) { console.error('[admin] Bracket checkpoint failed', error); failed = true; Astro.response.status = 503; }
+---
+<AdminLayout title="Bracket Setup">
+  {failed ? <p role="alert" class="admin-error">Could not load saved participants. Check staging and reload.</p> : !state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup</p></div><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Back to Participants</a></header>
+    <section class="admin-next"><h2>Saved participants</h2><p>{state.participants.length} / {state.stage?.[3]} teams · {state.stage?.[1]}</p><p>Draw, seeding, and BYE placement will be configured in the next workflow. This page does not generate a bracket.</p></section>
+    <ul class="admin-list">{state.participants.map(team => <li><strong>{team.name}</strong><span>{team.tag} · {team.region}</span></li>)}</ul>
+    <a href="/admin">Back to tournaments</a>
+  </>}
+</AdminLayout>

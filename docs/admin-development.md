@@ -90,9 +90,9 @@ precedes it. Round IDs remain stable when names change. Add/remove buttons post
 only form edits, work without JavaScript, and never write to D1.
 
 Saving writes one stage and its rounds in a single D1 transaction, then redirects
-with 303 to `/admin/tournaments/{id}/participants`. This destination displays saved
-setup and any existing registered teams; participant selection and bracket
-generation remain outside this scope. Map pools, veto steps, and S&D/Economy
+with 303 to `/admin/tournaments/{id}/participants`. Participants v1 continues with
+team selection and creation, as described below. Bracket generation remains a
+future workflow. Map pools, veto steps, and S&D/Economy
 rulesets are not edited here.
 
 Setup posts use the same local-only staging boundary, exact Origin checking,
@@ -102,3 +102,38 @@ read-only. Snapshot revisions reject stale tabs; a transaction-level snapshot
 constraint also prevents races between validation and writing. Failed writes
 roll back stage and round changes together. Existing stage map pools and veto
 steps are preserved.
+
+## Participants v1
+
+The page loads the saved `tournament_teams` and the existing team catalog from
+staging. Its counter uses the saved stage's bracket size. Pick an existing team
+(search is available with JavaScript), or open Create New Team and enter a name,
+tag, and region (default ID). New teams get stable IDs from their names; existing
+team names, tags, region, roster, and history are not overwritten.
+The public team list/profiles still read the legacy Astro content collection;
+creating a staging team makes it available to admin, but does not publish a new
+public profile or add it to source JSON. Public team-read migration is outside
+Participants v1.
+
+Add/remove actions update the posted form draft only. They work without
+JavaScript and do not write to D1. New team drafts are visibly marked unsaved.
+Save & Continue atomically creates new teams and replaces tournament memberships,
+then redirects with 303 to `/admin/tournaments/{id}/bracket`. That read-only
+checkpoint shows saved participants; it does not draw, seed, or generate a
+bracket. At least two teams are required to continue; fewer than the bracket's
+capacity are allowed. No BYEs or roster/player records are created here.
+
+Duplicate teams, existing-name/slug collisions, missing team IDs, and counts over
+the bracket size are rejected. Team names require 3–120 readable characters,
+tags 1–20, and region 2–32. Unadded selections/new-team input must be added to the
+list before saving, so typing into the entry panel is not silently discarded.
+
+Participants use the same local-only staging/Origin boundary. POST bodies are
+URL-encoded, exact fields, at most 256 rows and 512 KiB. Only setup/participants
+and tournament creation allow POST; the bracket checkpoint is read-only. Built
+admin routes remain closed. Started tournaments, multiple stages, or existing
+matches/byes block edits. Revisions cover setup, participants, status, and bracket
+state; a transaction-level constraint rejects races after the initial read.
+Failed saves roll back new-team creation and membership changes together. Removing
+a participant never deletes its global team. Remote staging test writes are not
+performed by the verification suite.

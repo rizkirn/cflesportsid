@@ -41,7 +41,46 @@ const added = await submit(add); assert.equal(added.status,200); assert.match(aw
 assert.equal((await (await get(path)).text()).includes('rounds.5.name'),false);
 const invalid = new URLSearchParams(setupInput); invalid.set('bracket_size','15'); assert.equal((await submit(invalid)).status,400);
 const saved = await submit(setupInput); assert.equal(saved.status,303); assert.equal(saved.headers.get('location'),path.replace('/setup','/participants'));
-const participants = await get(saved.headers.get('location')); assert.equal(participants.status,200); assert.match(await participants.text(),/Setup saved/);
+const participants = await get(saved.headers.get('location')); assert.equal(participants.status,200); assert.match(await participants.text(),/Participant list/);
 assert.equal((await submit(setupInput)).status,409);
 assert.match(await (await get(path)).text(),/Bronze Match/);
-console.log('Admin HTTP checks passed: staging list, create/303/setup, duplicate, validation, CSRF, missing ID, methods, proxy denial and cache headers. Test records remain only in the offline simulation.');
+const participantPath = path.replace('/setup','/participants');
+const participantPost = (data, origin=base) => fetch(base+participantPath,{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:data});
+const hiddenFields = html => {
+  const params = new URLSearchParams();
+  for (const [tag] of html.matchAll(/<input\b[^>]*>/g)) {
+    if (!/type="hidden"/.test(tag)) continue;
+    const name=tag.match(/name="([^"]*)"/)[1];
+    const value=(tag.match(/value="([^"]*)"/)?.[1] ?? '').replaceAll('&amp;','&').replaceAll('&#39;',"'").replaceAll('&quot;','"');
+    params.set(name,value);
+  }
+  return params;
+};
+let participantData = hiddenFields(await (await get(participantPath)).text());
+assert.equal((await participantPost(participantData,'https://evil.example')).status,403);
+assert.equal((await participantPost(participantData)).status,400);
+const firstTeam=`HTTP Alpha ${crypto.randomUUID()}`;
+const secondTeam=`HTTP Beta ${crypto.randomUUID()}`;
+for (const name of [firstTeam,secondTeam]) {
+  participantData.set('intent','add-new');participantData.set('new_name',name);participantData.set('new_tag','HTTP');participantData.set('new_region','ID');
+  const draft=await participantPost(participantData);assert.equal(draft.status,200);
+  participantData=hiddenFields(await draft.text());
+}
+assert.match(await (await get(participantPath)).text(),/0 \/ 16 teams/);
+assert.equal((await get(path.replace('/setup','/bracket'))).status,303);
+const draftRevision=participantData.get('revision');
+const persisted=await participantPost(participantData);assert.equal(persisted.status,303);assert.equal(persisted.headers.get('location'),path.replace('/setup','/bracket'));
+const bracket=await get(persisted.headers.get('location'));assert.equal(bracket.status,200);assert.match(await bracket.text(),/Saved participants/);
+let participantHTML=await (await get(participantPath)).text();assert.match(participantHTML,/2 \/ 16 teams/);assert.match(participantHTML,new RegExp(firstTeam));
+assert.equal((await participantPost(participantData)).status,409);
+participantData=hiddenFields(participantHTML);assert.notEqual(participantData.get('revision'),draftRevision);
+const removedId=participantData.get('participants.0.id');
+const invalidTeam=new URLSearchParams(participantData);invalidTeam.set('participants.0.id','__missing__');assert.equal((await participantPost(invalidTeam)).status,400);
+const duplicateTeam=new URLSearchParams(participantData);duplicateTeam.set('intent','add-existing');duplicateTeam.set('team_id',removedId);assert.equal((await participantPost(duplicateTeam)).status,400);
+const removal=new URLSearchParams(participantData);removal.set('remove_participant','0');
+const removed=await participantPost(removal);assert.equal(removed.status,200);const removedHTML=await removed.text();assert.match(removedHTML,/1 \/ 16 teams/);
+assert.match(await (await get(participantPath)).text(),/2 \/ 16 teams/);
+const restored=hiddenFields(removedHTML);restored.set('intent','add-existing');restored.set('team_id',removedId);
+const restoredResponse=await participantPost(restored);assert.equal(restoredResponse.status,200);assert.match(await restoredResponse.text(),/2 \/ 16 teams/);
+assert.equal((await fetch(base+path.replace('/setup','/bracket'),{method:'POST',headers:{origin:base,'content-type':'application/x-www-form-urlencoded'},body:'intent=save'})).status,405);
+console.log('Admin HTTP checks passed: create/setup, participant drafts, create new teams, existing team selection/removal, save/303/bracket, counts, duplicates, stale forms, validation, CSRF, methods and cache headers. All test records remain in the offline simulation.');

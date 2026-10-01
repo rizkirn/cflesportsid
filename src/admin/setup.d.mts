@@ -11,6 +11,7 @@ export interface Setup {
     rounds: [string, string, string, number, number | null][]; status: string; matches: number; byes: number };
 }
 export const cfgTemplate: Omit<SetupForm, 'revision'>;
+export const setupSnapshotSQL: string;
 export function readSetup(db: D1Database, tournamentId: string | undefined): Promise<Setup | null>;
 export function setupForm(setup: Setup, useTemplate?: boolean): SetupForm;
 export function readSetupForm(request: Request): Promise<SetupForm>;

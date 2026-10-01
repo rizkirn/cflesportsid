@@ -81,7 +81,7 @@ try {
   const d1 = await start(d1Config, seededStore, 44321);
   const fallback = await start(fallbackConfig, join(scratch, 'empty'), 44322);
   for (const server of [d1, fallback]) {
-    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants']) {
+    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket']) {
       for (const method of ['GET', 'POST']) {
         const denied = await fetch(server.url + path, { method, redirect: 'manual', ...(method === 'POST' ? { headers: { origin: server.url, 'content-type': 'application/x-www-form-urlencoded' }, body: 'revision=test' } : {}) });
         assert.equal(denied.status, 403, `Built admin must be closed: ${method} ${path}`);

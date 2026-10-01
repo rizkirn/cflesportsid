@@ -13,7 +13,7 @@ export const cfgTemplate = {
   ],
 };
 const stageFields = ['stage_id', 'stage_name', 'format', 'bracket_size', 'series_type', 'map_count', 'final_map_rule', 'action_seconds', 'reserve_seconds'];
-const snapshotSQL = `json_object(
+export const setupSnapshotSQL = `json_object(
   'stages', json((SELECT json_group_array(json_array(id, name, format, bracket_size, series_type, map_count, final_map_rule, action_seconds, reserve_seconds))
     FROM (SELECT * FROM tournament_stages WHERE tournament_id = ?1 ORDER BY id))),
   'rounds', json((SELECT json_group_array(json_array(stage_id, id, name, sort_order, placement))
@@ -22,6 +22,7 @@ const snapshotSQL = `json_object(
   'matches', (SELECT count(*) FROM matches WHERE tournament_id = ?1),
   'byes', (SELECT count(*) FROM tournament_byes WHERE tournament_id = ?1)
 )`;
+const snapshotSQL = setupSnapshotSQL;
 
 async function revision(snapshot) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(snapshot));
