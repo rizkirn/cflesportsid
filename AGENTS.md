@@ -5,5 +5,5 @@ For UI, copy, people, mobile layout, or code comments work, load the antislop sk
 - UI / visual: `antislop-ui`
 - People: `antislop-human`
 - Mobile / responsive: `antislop-layoutmobile`
-Before starting, ask the user when antislop applies: during the work, or after it is done.
+Default mode: DURING, selected by the user on 2026-10-01. Apply antislop during planning and implementation. Do not repeat the mode question unless the user asks to change it.
 <!-- antislop:end -->

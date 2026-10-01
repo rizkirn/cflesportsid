@@ -1,0 +1,20 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { getTournament, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
+if (!['GET', 'HEAD'].includes(Astro.request.method)) return new Response('Method not allowed.', { status: 405, headers: { Allow: 'GET, HEAD' } });
+let tournament; let unavailable = false;
+try { tournament = await getTournament(db, Astro.params.id); }
+catch (error) { console.error('[admin] Tournament setup failed', error); unavailable = true; }
+if (unavailable) Astro.response.status = 503;
+else if (!tournament) Astro.response.status = 404;
+---
+<AdminLayout title={tournament ? `${tournament.name} setup` : 'Tournament setup'}>
+  {unavailable ? <p role="alert" class="admin-error">Could not load this tournament from staging. Check the database connection and reload.</p> : !tournament ? <section><h1>Tournament not found</h1><p><a href="/admin">Return to tournaments</a></p></section> : <>
+    <header class="admin-heading"><div><h1>{tournament.name}</h1><p>Tournament setup</p></div><span class={`status-badge status-${tournament.status}`}>{tournament.status}</span></header>
+    <dl class="admin-defaults"><div><dt>Dates</dt><dd>{tournament.start_date} to {tournament.end_date}</dd></div><div><dt>Game</dt><dd>{tournament.game}</dd></div><div><dt>Region</dt><dd>{tournament.region}</dd></div><div><dt>Format</dt><dd>{tournament.format}</dd></div><div><dt>Tournament ID</dt><dd>{tournament.id}</dd></div></dl>
+    <section class="admin-next"><h2>Next: teams and bracket</h2><p>The tournament record is saved. Team registration, seeding, and bracket configuration will be added in the next admin workflow.</p></section>
+  </>}
+</AdminLayout>

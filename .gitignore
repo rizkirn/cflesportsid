@@ -9,3 +9,6 @@ dist/
 
 .wrangler/
 .generated/
+
+# Generated Cloudflare admin bindings
+src/admin/bindings.d.mts

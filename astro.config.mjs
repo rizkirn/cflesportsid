@@ -12,8 +12,10 @@ const detailPages = [['matches', 'matches'], ['teams', 'teams'], ['players', 'pl
 
 export default defineConfig({
   site,
-  adapter: cloudflare({ imageService: 'passthrough', prerenderEnvironment: 'node' }),
+  adapter: cloudflare({ imageService: 'passthrough', prerenderEnvironment: 'node',
+    ...(process.env.CFL_ADMIN_CONFIG ? { configPath: process.env.CFL_ADMIN_CONFIG } : {}),
+  }),
   session: false,
   prefetch: true,
-  integrations: [sitemap({ customPages: detailPages })],
+  integrations: [sitemap({ customPages: detailPages, filter: url => !new URL(url).pathname.startsWith('/admin') })],
 });

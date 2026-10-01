@@ -1,0 +1,58 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { AdminError, createTournament, readCreateForm, requireLocalAdmin } from '../../../admin/tournaments.mjs';
+const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
+let errorMessage = ''; let values = { name: '', start_date: '', end_date: '' };
+if (Astro.request.method === 'POST') {
+  try {
+    const input = await readCreateForm(Astro.request);
+    values = { name: input.name ?? '', start_date: input.start_date ?? '', end_date: input.end_date ?? '' };
+    const id = await createTournament(db, input);
+    return Astro.redirect(`/admin/tournaments/${id}/setup`, 303);
+  } catch (error) {
+    if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
+    else { console.error('[admin] Tournament creation failed', error); errorMessage = 'Could not create the tournament. Check staging and try again.'; Astro.response.status = 503; }
+  }
+}
+---
+<AdminLayout title="Create Tournament">
+  <header class="admin-heading"><div><h1>Create Tournament</h1><p>Start with a name and confirmed dates.</p></div></header>
+  <form method="post" action="/admin/tournaments/new" class="admin-form">
+    {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
+    <label for="name">Tournament name</label><input id="name" name="name" value={values.name} minlength="3" maxlength="120" required aria-describedby="name-help" />
+    <p id="name-help" class="admin-help">The name determines the tournament URL. Use a distinct name for each season.</p>
+    <div class="admin-dates"><div><label for="start_date">Start date</label><input type="date" id="start_date" name="start_date" value={values.start_date} required /></div><div><label for="end_date">End date</label><input type="date" id="end_date" name="end_date" value={values.end_date} required /></div></div>
+    <p class="admin-help">Both dates are required. Enter the confirmed schedule.</p>
+    <dl class="admin-defaults"><div><dt>Game</dt><dd>Crossfire: Legends</dd></div><div><dt>Region</dt><dd>ID</dd></div><div><dt>Format</dt><dd>Single elimination</dd></div><div><dt>Status</dt><dd>Upcoming</dd></div></dl>
+    <div class="admin-actions"><button type="submit" class="admin-button">Create Tournament</button><a href="/admin">Cancel</a></div>
+    <p class="admin-submit-status admin-help" role="status" aria-live="polite" aria-atomic="true"></p>
+  </form>
+</AdminLayout>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('.admin-form');
+  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+  const status = form?.querySelector<HTMLElement>('.admin-submit-status');
+  if (form && button && status) {
+    let submitting = false;
+    const reset = () => {
+      submitting = false;
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+      button.textContent = 'Create Tournament';
+      status.textContent = '';
+    };
+    form.addEventListener('submit', event => {
+      if (event.defaultPrevented) return;
+      if (submitting) { event.preventDefault(); return; }
+      submitting = true;
+      button.disabled = true;
+      button.setAttribute('aria-busy', 'true');
+      button.textContent = 'Creating Tournament...';
+      status.textContent = 'Saving the tournament. Please wait.';
+    });
+    window.addEventListener('pageshow', reset);
+  }
+</script>
