@@ -1,44 +1,34 @@
-# Bracket Setup v1
+# Official tournament bracket
 
-Use the existing `scripts/admin-dev.mjs` launcher. It preserves `wrangler.jsonc`,
-binds only staging (including the frontend read binding), and listens on loopback.
-`--local` uses an isolated local simulation; omitting it targets configured staging.
-The launcher generates a fresh signing key in ignored `.generated/.dev.vars`,
-with mode 0600. This follows Cloudflare's local secret-file convention and is
-not a password/login system. Do not reuse that file for other settings; it is
-owned by the launcher. Draw previews expire after two hours or launcher restart.
+Open Bracket from the persistent tournament workspace. Saved Setup, at least two
+participants, and a valid 5–7-player roster for every participant are required.
+A four-slot Bronze bracket needs four teams to supply both semifinal losers.
 
-From saved Setup and Participants, open `/admin/tournaments/{id}/bracket`.
-Choose **How many draws?** (1–20) and start Official Draw. The server creates
-exactly that number of independent draws from the original registered pool and
-required BYEs; every numbered draw is shown. There is no initial extra draw,
-seeding, manual placement, or database write during preview. The last draw is
-marked Final candidate and has the only **Confirm Official Bracket** action.
-Starting another sequence discards the displayed preview.
+Choose 1–20 requested draws. Each draw independently randomizes the original
+participant pool plus required BYEs exactly once using the shared public bracket
+engine. There is no extra initial randomization. BYE versus BYE is avoided whenever
+mathematically possible. No seeding or manual placement is introduced.
 
-Confirmation verifies the signed candidate, tournament identity, expiry and
-unchanged setup/participants/tournament metadata. One guarded transactional D1
-batch inserts explicit BYEs, upcoming matches and winner/loser/BYE progression.
-No fake played BYE match, result, map, player or roster record is created. A
-concurrent change or insert failure aborts the whole batch. A second confirmation
-cannot replace an existing bracket. Successful confirmation redirects to the
-read-only `/admin/tournaments/{id}/matches` list and locks Setup/Participants.
+Compact Draw 1..N history controls display one full bracket at a time. The final
+draw opens by default and is the only confirmable candidate. Selecting an earlier
+draw hides confirmation. Starting another sequence replaces the preview; preview
+history is not persisted. This supports Technical Meeting screen sharing.
 
-Match dates initially use the saved tournament start date. This is disclosed
-before confirmation; individual scheduling and results editing are later work.
-No S3 dates are supplied. Preview history/audit storage and bracket reset are not
-part of v1. No schema migration is needed for this workflow.
+Confirmation verifies its signature, tournament identity, expiry, roster snapshots
+and unchanged setup/participants. One guarded D1 batch inserts explicit BYEs,
+upcoming matches and winner/loser/BYE progression. Races or write failures roll
+back the batch. Repeated confirmation cannot replace an official bracket.
 
-The existing local-development and explicit staging-binding boundary remains
-mandatory. POSTs additionally require same Origin, URL-encoded content, bounded
-body size and exact nonrepeated fields. Built/deployed admin is closed, including
-GET and POST to bracket/matches. There is no public bracket write endpoint.
+Success opens the existing read-only Matches page. Setup, Participants and Roster
+remain viewable and hard locked. Initial match dates use the saved tournament
+start date; scheduling and results editing remain future work. No fake played BYE
+match or fabricated result is created.
 
-Verification uses real-schema SQLite tests, an offline D1 HTTP flow and browser
-checks. Public runtime comparisons retain legacy equality for unchanged pages;
-`/bracket-generator/` intentionally gains custom-team controls, while its D1 and
-JSON-fallback output must still match. Tests never target remote staging or
-production.
+Use the existing local development launcher. Its ignored signing secret expires
+preview tokens after two hours or launcher restart. Development/loopback/staging
+checks, same-Origin POSTs, strict bounded fields and production admin denial
+remain mandatory. Tests use isolated local databases only.
 
-References: [D1 transactional batches](https://developers.cloudflare.com/d1/worker-api/d1-database/#batch),
-[local secret files](https://developers.cloudflare.com/workers/configuration/secrets/#local-development-with-secrets).
+No new migration or remote apply is required. Existing migration 0003 is unchanged.
+The public `/bracket-generator` and its temporary Custom Team behavior remain
+intact; the shared engine is unchanged.

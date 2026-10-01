@@ -5,100 +5,62 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
 import { readParticipantState, participantForm, readParticipantForm, editParticipantForm, saveParticipants } from '../../../../admin/participants.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let state; let values; let errorMessage = ''; let notice = '';
+let state; let values; let errorMessage = '';
 try {
   state = await readParticipantState(db, Astro.params.id);
   if (!state) Astro.response.status = 404;
   else {
-    if (!state.stage && Astro.request.method !== 'POST') return Astro.redirect(`/admin/tournaments/${state.tournament.id}/setup`, 303);
     values = participantForm(state);
     if (Astro.request.method === 'POST') {
       values = await readParticipantForm(Astro.request);
-      if (values.remove_participant !== undefined || values.intent !== 'save') {
-        await editParticipantForm(values, state);
-        notice = 'Participant list updated. Save & Continue to save these changes.';
-      } else {
-        if (values.team_id || values.new_name.trim() || values.new_tag.trim() || values.new_region !== 'ID') throw new AdminError('Add the selected or new team to the list before saving.');
-        await saveParticipants(db, state.tournament.id, values);
-        return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
-      }
+      if (!['add-selected', 'remove-selected', 'add-new'].includes(values.intent)) throw new AdminError('Choose Add Selected, Remove Selected or Create Team.');
+      await editParticipantForm(values, state);
+      await saveParticipants(db, state.tournament.id, values);
+      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/participants?saved=1`, 303);
     }
   }
 } catch (error) {
   if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
-  else { console.error('[admin] Participants failed', error); errorMessage = 'Could not load or save participants. Check staging and try again.'; Astro.response.status = 503; }
+  else { console.error('[admin] Participants failed', error); errorMessage = 'Could not save participants. Reload to review the saved state.'; Astro.response.status = 503; }
+  if (state && values) values.participants = participantForm(state).participants;
 }
 const editable = state?.ready && !state.locked;
-const rows = values?.participants.map(row => row.id ? state?.teams.find(team => team.id === row.id) ?? row : row) ?? [];
-const available = state?.teams.filter(team => !rows.some(row => row.id === team.id)) ?? [];
+const rows = state?.participants ?? [];
+const allTeams = state?.teams ?? [];
 ---
-<AdminLayout title="Participants">
+<AdminLayout title="Participants" workspace={state}>
   {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
   {!state || !values ? <><h1>Participants unavailable</h1><a href="/admin">Back to tournaments</a></> : <>
     <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Participants</p></div><span class="participant-counter">{rows.length} / {state.stage?.[3] ?? 0} teams</span></header>
-    {!editable && <p class="admin-next">Participants are read-only. {state.locked ? 'The tournament has started or its official bracket is already saved.' : 'Finish a single-stage setup before adding teams.'}</p>}
-    <form method="post" action={`/admin/tournaments/${state.tournament.id}/participants`} class="admin-form participant-form">
+    {!editable && <p class="admin-next">Participants are read-only. {state.locked ? 'The tournament has started or its official bracket is saved.' : 'Save Tournament Setup before adding teams.'}</p>}
+    {Astro.url.searchParams.has('saved') && <p role="status">Participants saved. Review copied rosters before the draw.</p>}
+    <p class="admin-help">Select teams in the table, then add or remove them in one action. Adding a team copies its most recent earlier tournament roster when available. A player already registered here stays with their current team; review incomplete copied rosters in Roster.</p>
+    <form method="post" class="admin-form participant-form" data-pending-form>
       <input type="hidden" name="revision" value={values.revision} />
-      {editable && <div class="admin-actions participant-save-top"><button class="admin-button" type="submit" data-save>Save &amp; Continue</button></div>}
-      {editable && <p class="admin-help">Add or remove teams, then Save &amp; Continue to save the list. New teams are created when you save. Empty slots remain available for BYE placement in Bracket Setup.</p>}
-      {notice && <p role="status" class="participant-notice">{notice}</p>}
-      <section aria-labelledby="selected-teams"><h2 id="selected-teams">Participant list</h2>
-        {rows.length ? <ul class="admin-list participant-list">{rows.map((team,index) => <li>
-          <div><strong>{team.name || team.id}</strong><p>{team.tag} · {team.region}{!team.id && ' · New team, not saved yet'}</p>
-            {['id','name','tag','region'].map(key => <input type="hidden" name={`participants.${index}.${key}`} value={team[key as keyof typeof team]} />)}
-          </div>
-          {editable && <button class="admin-outline" type="submit" name="remove_participant" value={index} formnovalidate aria-label={`Remove ${team.name || team.id}`}>Remove</button>}
-        </li>)}</ul> : <p class="admin-empty">No teams selected. Add existing teams or create a new team below.</p>}
-      </section>
-      {editable && <section class="participant-add" aria-labelledby="add-team"><h2 id="add-team">Add Team</h2>
-        {rows.length >= (state.stage?.[3] ?? 0) ? <p class="admin-help">All bracket slots are filled. Remove a participant to add another team.</p> : <>
-          {available.length ? <>
-            <label class="participant-search" hidden for="team-search">Search existing teams</label><input class="participant-search" hidden id="team-search" type="search" autocomplete="off" aria-controls="team_id" />
-            <label for="team_id">Existing team</label><select id="team_id" name="team_id"><option value="">Select a team</option>{available.map(team => <option value={team.id} selected={values.team_id === team.id}>{team.name} ({team.tag}) · {team.region}</option>)}</select>
-            <p class="admin-help" data-search-status role="status"></p>
-            <button class="admin-outline" type="submit" name="intent" value="add-existing" formnovalidate>Add selected team</button>
-          </> : <p class="admin-help">No other existing teams are available. Create a new team below.</p>}
-          <details class="participant-create" open={!!values.new_name || !!values.new_tag || values.intent === 'add-new'}><summary>Create New Team</summary>
-            <div class="setup-grid"><div><label for="new_name">Team name</label><input id="new_name" name="new_name" value={values.new_name} maxlength="120" /></div><div><label for="new_tag">Team tag</label><input id="new_tag" name="new_tag" value={values.new_tag} maxlength="20" /></div><div><label for="new_region">Region</label><input id="new_region" name="new_region" value={values.new_region} maxlength="32" /></div></div>
-            <p class="admin-help">Enter a name, tag, and region. This step adds a team only; roster and players are managed separately.</p>
-            <button class="admin-outline" type="submit" name="intent" value="add-new" formnovalidate>Add new team</button>
-          </details>
-        </>}
-      </section>}
-      <div class="admin-actions">{editable && <button class="admin-button" type="submit" data-save>Save &amp; Continue</button>}<a href={`/admin/tournaments/${state.tournament.id}/setup`}>Back to Setup</a>{!editable && state.participants.length >= 2 && <a href={`/admin/tournaments/${state.tournament.id}/bracket`}>Bracket Setup</a>}</div>
-      <p class="admin-submit-status admin-help" role="status" aria-live="polite" aria-atomic="true"></p>
+      {rows.map((team,index) => ['id','name','tag','region'].map(key => <input type="hidden" name={`participants.${index}.${key}`} value={team[key as keyof typeof team]} />))}
+      <div class="table-toolbar"><div><label for="team-search">Search teams</label><input id="team-search" type="search" autocomplete="off" /></div><div><label for="team-filter">Show</label><select id="team-filter"><option value="all">All teams</option><option value="registered">Participants</option><option value="available">Available teams</option></select></div></div>
+      {editable && <div class="admin-actions table-actions"><button class="admin-button" type="submit" name="intent" value="add-selected" formnovalidate>Add Selected</button><button class="admin-outline" type="submit" name="intent" value="remove-selected" formnovalidate>Remove Selected</button><button class="admin-outline" type="button" data-select-visible>Select visible</button><button class="admin-outline" type="button" data-clear-selection>Clear selection</button></div>}
+      <p class="admin-help" data-team-status role="status" aria-live="polite">{allTeams.length} teams · 0 selected</p>
+      <table class="admin-table" data-team-table><caption>Team directory and participant registration</caption><thead><tr>{editable && <th scope="col">Select</th>}<th scope="col">Team</th><th scope="col">Tag / Region</th><th scope="col">Registration</th></tr></thead><tbody>
+        {allTeams.map(team => { const registered = rows.some(row => row.id === team.id); return <tr data-team-row data-search={`${team.name} ${team.tag} ${team.region} ${team.id}`.normalize('NFKC').toLowerCase()} data-registration={registered ? 'registered' : 'available'}>
+          {editable && <td data-label="Select"><input type="checkbox" name={`selected.${team.id}`} value="1" aria-label={`Select ${team.name}`} /></td>}
+          <td data-label="Team"><strong>{team.name}</strong></td><td data-label="Tag / Region">{team.tag} · {team.region}</td><td data-label="Registration">{registered ? 'Participant' : 'Available'}</td>
+        </tr>; })}
+      </tbody></table>
+      <p class="admin-empty" data-no-teams hidden>No teams match this search. Change the search or filter.</p>
+      {!allTeams.length && <p class="admin-empty">No teams exist yet. Create Team to register the first participant.</p>}
+      {editable && <details class="participant-create" open={!!values.new_name || values.intent === 'add-new'}><summary>Create Team</summary><div class="setup-grid"><div><label for="new_name">Team name</label><input id="new_name" name="new_name" value={values.new_name} maxlength="120" /></div><div><label for="new_tag">Team tag</label><input id="new_tag" name="new_tag" value={values.new_tag} maxlength="20" /></div><div><label for="new_region">Region</label><input id="new_region" name="new_region" value={values.new_region} maxlength="32" /></div></div><p class="admin-help">Creates the team and registers it in this tournament.</p><button class="admin-outline" type="submit" name="intent" value="add-new" formnovalidate>Create and Add Team</button></details>}
+      <p class="admin-submit-status admin-help" role="status" aria-live="polite"></p>
     </form>
+    <div class="admin-actions roster-continue"><a class="admin-button" href={`/admin/tournaments/${state.tournament.id}/roster`}>Manage Roster</a></div>
   </>}
 </AdminLayout>
 <script>
-  const form = document.querySelector<HTMLFormElement>('.participant-form');
-  const buttons = form ? Array.from(form.querySelectorAll<HTMLButtonElement>('[data-save]')) : [];
-  const status = form?.querySelector<HTMLElement>('.admin-submit-status');
-  if (form && buttons.length && status) {
-    let submitting = false;
-    form.addEventListener('submit', event => {
-      if (event.defaultPrevented) return;
-      if (submitting) { event.preventDefault(); return; }
-      submitting = true; form.setAttribute('aria-busy', 'true');
-      const saving = buttons.includes(event.submitter as HTMLButtonElement);
-      buttons.forEach(button => { button.disabled = true; if (saving) button.textContent = 'Saving Participants...'; });
-      status.textContent = saving ? 'Saving participants. Please wait.' : 'Updating participant list. Please wait.';
-    });
-    window.addEventListener('pageshow', () => { submitting = false; form.removeAttribute('aria-busy'); buttons.forEach(button => { button.disabled = false; button.textContent = 'Save & Continue'; }); status.textContent = ''; });
-  }
-  const search = document.querySelector<HTMLInputElement>('#team-search');
-  const select = document.querySelector<HTMLSelectElement>('#team_id');
-  const searchStatus = document.querySelector<HTMLElement>('[data-search-status]');
-  if (search && select && searchStatus) {
-    document.querySelectorAll<HTMLElement>('.participant-search').forEach(element => { element.hidden = false; });
-    const options = Array.from(select.options).slice(1).map(option => ({ value: option.value, text: option.text }));
-    search.addEventListener('input', () => {
-      const selected = select.value; const query = search.value.normalize('NFKC').trim().toLowerCase();
-      const matches = options.filter(option => option.text.normalize('NFKC').toLowerCase().includes(query));
-      select.replaceChildren(new Option('Select a team', ''), ...matches.map(option => new Option(option.text, option.value)));
-      if (matches.some(option => option.value === selected)) select.value = selected;
-      searchStatus.textContent = matches.length ? `${matches.length} teams available.` : 'No matching teams. Try another search or create a new team.';
-    });
-    search.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); select.focus(); } });
-  }
+  const search = document.querySelector<HTMLInputElement>('#team-search'); const filter = document.querySelector<HTMLSelectElement>('#team-filter');
+  const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>('[data-team-row]')); const status = document.querySelector('[data-team-status]'); const empty = document.querySelector<HTMLElement>('[data-no-teams]');
+  const update = () => { const query = search?.value.normalize('NFKC').trim().toLowerCase() ?? ''; rows.forEach(row => { row.hidden = !row.dataset.search?.includes(query) || (filter?.value !== 'all' && row.dataset.registration !== filter?.value); }); const visible = rows.filter(row => !row.hidden).length; const selected = rows.filter(row => row.querySelector<HTMLInputElement>('input')?.checked).length; if (status) status.textContent = `${visible} teams shown · ${selected} selected`; if (empty) empty.hidden = visible > 0; };
+  search?.addEventListener('input', update); filter?.addEventListener('change', update); rows.forEach(row => row.addEventListener('change', update));
+  document.querySelector('[data-select-visible]')?.addEventListener('click', () => { rows.filter(row => !row.hidden).forEach(row => { const box = row.querySelector<HTMLInputElement>('input'); if (box) box.checked = true; }); update(); });
+  document.querySelector('[data-clear-selection]')?.addEventListener('click', () => { rows.forEach(row => { const box = row.querySelector<HTMLInputElement>('input'); if (box) box.checked = false; }); update(); });
+  search?.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
 </script>

@@ -2,9 +2,9 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import RoundFields from '../../../../components/admin/SetupRoundFields.astro';
 import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
-import { readSetup, setupForm, readSetupForm, editRoundForm, saveSetup } from '../../../../admin/setup.mjs';
+import { readSetup, setupForm, readSetupForm, saveSetup, eliminationRounds } from '../../../../admin/setup.mjs';
+import { readParticipantState } from '../../../../admin/participants.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
 let setup; let values; let errorMessage = '';
 try {
@@ -14,62 +14,47 @@ try {
     values = setupForm(setup, !setup.locked && Astro.url.searchParams.get('template') === 'clash-for-glory');
     if (Astro.request.method === 'POST') {
       values = await readSetupForm(Astro.request);
-      if (setup.locked) throw new AdminError('This setup is read-only because the tournament has started, matches or byes exist, or multiple stages are present.', 409);
-      if (values.remove_round !== undefined || values.intent === 'add-round') editRoundForm(values);
-      else {
-        if (values.intent !== 'save') throw new AdminError('Unknown setup action.');
-        await saveSetup(db, setup.tournament.id, values);
-        return Astro.redirect(`/admin/tournaments/${setup.tournament.id}/participants`, 303);
-      }
+      if (values.intent !== 'save' || values.remove_round !== undefined) throw new AdminError('Rounds are generated from bracket size.');
+      await saveSetup(db, setup.tournament.id, values);
+      return Astro.redirect(`/admin/tournaments/${setup.tournament.id}/setup?saved=1`, 303);
     }
   }
 } catch (error) {
+  if (setup?.locked) values = setupForm(setup);
   if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
-  else { console.error('[admin] Setup failed', error); errorMessage = 'Could not load or save setup. Check staging and try again.'; Astro.response.status = 503; }
+  else { console.error('[admin] Setup failed', error); errorMessage = 'Could not load or save setup. Reload to review the saved state.'; Astro.response.status = 503; }
 }
-const fields = [
-  ['stage_name', 'Stage name', 'text', 1, 120], ['format', 'Format', 'text'],
-  ['bracket_size', 'Bracket size', 'number', 2, 256], ['series_type', 'Series type', 'text'],
-  ['map_count', 'Maps per match', 'number', 1, 15], ['final_map_rule', 'Final map rule', 'text'],
-  ['action_seconds', 'Action time (seconds)', 'number', 1, 300], ['reserve_seconds', 'Reserve time (seconds)', 'number', 1, 3600],
-];
+const fields = [ ['stage_name', 'Stage name', 'text', 1, 120], ['map_count', 'Maps per match', 'number', 1, 15], ['action_seconds', 'Action time (seconds)', 'number', 1, 300], ['reserve_seconds', 'Reserve time (seconds)', 'number', 1, 3600] ];
+const workspace = setup ? await readParticipantState(db,setup.tournament.id) : null;
 ---
-<AdminLayout title={setup ? `${setup.tournament.name} setup` : 'Tournament setup'}>
+<AdminLayout title="Tournament Setup" workspace={workspace}>
   {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
-  {!setup ? <section><h1>Tournament setup unavailable</h1><a href="/admin">Return to tournaments</a></section> : values && <>
-    <header class="admin-heading"><div><h1>{setup.tournament.name}</h1><p>Tournament Setup</p></div><span class={`status-badge status-${setup.tournament.status}`}>{setup.tournament.status}</span></header>
-    {setup.locked && <p class="admin-next">This setup is read-only. The tournament has started, matches or byes exist, or it has multiple stages.</p>}
-    <section class="setup-template"><h2>Setup Template</h2><p>Clash for Glory: 16 slots, five rounds, three maps per match.</p>{!setup.locked && <a href={`?template=clash-for-glory`}>Apply Clash for Glory</a>}<p class="admin-help">Applying the template fills the form. Changes are saved only when you continue.</p></section>
-    <form method="post" class="admin-form setup-form" action={`/admin/tournaments/${setup.tournament.id}/setup`}>
+  {!setup || !values ? <><h1>Tournament setup unavailable</h1><a href="/admin">Return to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{setup.tournament.name}</h1><p>Tournament Setup</p></div><span>{setup.tournament.status}</span></header>
+    {setup.locked && <p class="admin-next">Setup is read-only. The tournament has started, its official bracket is saved, or it has multiple stages.</p>}
+    {Astro.url.searchParams.has('saved') && <p role="status">Setup saved.</p>}
+    {!setup.locked && <details class="setup-template"><summary>Clash for Glory template</summary><p>16 slots, Bronze Match, three maps per match, 20-second actions and 90-second reserves.</p><a href="?template=clash-for-glory">Fill from template</a><p class="admin-help">Review the fields and save to apply.</p></details>}
+    <form method="post" class="admin-form setup-form" data-pending-form>
       <input type="hidden" name="revision" value={values.revision} /><input type="hidden" name="stage_id" value={values.stage_id} />
-      {!setup.locked && <div class="admin-actions setup-save-top"><button type="submit" class="admin-button" data-save>Save &amp; Continue</button></div>}
-      <fieldset disabled={setup.locked} class="setup-stage"><legend>Stage settings</legend><div class="setup-grid">
-        {fields.map(([key, label, type, min, max]) => <div><label for={String(key)}>{label}</label><input id={String(key)} name={String(key)} type={String(type)} value={values[key as keyof typeof values] as string} min={type === 'number' ? min : undefined} max={type === 'number' ? max : undefined} maxlength={type === 'text' ? 120 : undefined} required /></div>)}
-      </div><p class="admin-help">Supported modes: single-elimination, fixed-maps, random final map. Use a power of two for bracket size and an odd map count.</p></fieldset>
-      <fieldset disabled={setup.locked} class="setup-rounds"><legend>Rounds</legend><p class="admin-help">Order runs from 1 to the round count. Final goes last; an optional Bronze Match goes immediately before it.</p>
-        {values.rounds.map((round, index) => <RoundFields round={round} index={index} />)}
-        {!setup.locked && <button class="admin-outline" type="submit" name="intent" value="add-round" formnovalidate>Add round</button>}
+      {['format', 'series_type', 'final_map_rule'].map(key => <input type="hidden" name={key} value={values[key as keyof typeof values] as string} />)}
+      <fieldset disabled={setup.locked} class="setup-stage"><legend>Stage settings</legend><p class="admin-help">Single elimination · Fixed maps · Random final map</p>
+        <div class="setup-grid">
+          <div><label for="bracket_size">Bracket size</label><select id="bracket_size" name="bracket_size">{[4,8,16,32].map(size => <option value={size} selected={values.bracket_size === String(size)}>{size} teams</option>)}</select></div>
+          {fields.map(([key, label, type, min, max]) => <div><label for={String(key)}>{label}</label><input id={String(key)} name={String(key)} type={String(type)} value={values[key as keyof typeof values] as string} min={type === 'number' ? min : undefined} max={type === 'number' ? max : undefined} maxlength={type === 'text' ? 120 : undefined} required /></div>)}
+        </div>
+        <label class="admin-checkbox"><input id="bronze_match" type="checkbox" name="bronze_match" value="1" checked={values.bronze_match === '1'} />Include Bronze Match</label>
       </fieldset>
-      <div class="admin-actions">{!setup.locked && <button type="submit" class="admin-button" data-save>Save &amp; Continue</button>}<a href="/admin">Back to tournaments</a>{setup.state.stages.length > 0 && <a href={`/admin/tournaments/${setup.tournament.id}/participants`}>Participants</a>}</div>
-      <p class="admin-submit-status admin-help" role="status" aria-live="polite" aria-atomic="true"></p>
+      <section class="setup-rounds"><h2>Generated rounds</h2><p class="admin-help">Elimination rounds follow the bracket size. Bronze Match uses the Semi Final losers.</p><ol data-generated-rounds>{(setup.locked ? values.rounds : eliminationRounds([4,8,16,32].includes(Number(values.bracket_size)) ? values.bracket_size : 16, values.bronze_match === '1')).map(round => <li>{round.name}</li>)}</ol></section>
+      <div class="admin-actions">{!setup.locked && <button type="submit" class="admin-button">Save Setup</button>}<a href={`/admin/tournaments/${setup.tournament.id}/participants`}>Manage Participants</a></div>
+      <p class="admin-submit-status admin-help" role="status" aria-live="polite"></p>
     </form>
   </>}
 </AdminLayout>
 <script>
-  const form = document.querySelector<HTMLFormElement>('.setup-form');
-  const buttons = form ? Array.from(form.querySelectorAll<HTMLButtonElement>('[data-save]')) : [];
-  const status = form?.querySelector<HTMLElement>('.admin-submit-status');
-  if (form && buttons.length && status) {
-    let submitting = false;
-    form.addEventListener('submit', event => {
-      if (event.defaultPrevented) return;
-      if (submitting) { event.preventDefault(); return; }
-      submitting = true;
-      form.setAttribute('aria-busy', 'true');
-      const saving = buttons.includes(event.submitter as HTMLButtonElement);
-      buttons.forEach(button => { button.disabled = true; if (saving) button.textContent = 'Saving Setup...'; });
-      status.textContent = saving ? 'Saving setup. Please wait.' : 'Updating round fields. Please wait.';
-    });
-    window.addEventListener('pageshow', () => { submitting = false; form.removeAttribute('aria-busy'); buttons.forEach(button => { button.disabled = false; button.textContent = 'Save & Continue'; }); status.textContent = ''; });
+  import { eliminationRounds } from '../../../../admin/setup.mjs';
+  const size = document.querySelector<HTMLSelectElement>('#bracket_size'); const bronze = document.querySelector<HTMLInputElement>('#bronze_match'); const list = document.querySelector('[data-generated-rounds]');
+  if (size && bronze && list && !size.closest('fieldset')?.disabled) {
+    const update = () => list.replaceChildren(...eliminationRounds(size.value, bronze.checked).map(round => { const li = document.createElement('li'); li.textContent = round.name; return li; }));
+    size.addEventListener('change', update); bronze.addEventListener('change', update);
   }
 </script>

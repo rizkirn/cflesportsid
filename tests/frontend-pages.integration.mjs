@@ -80,8 +80,20 @@ try {
   writeFileSync(fallbackConfig, JSON.stringify({ ...config, d1_databases: [] }));
   const d1 = await start(d1Config, seededStore, 44321);
   const fallback = await start(fallbackConfig, join(scratch, 'empty'), 44322);
+  // Tool economy controls predate this change; compare them with their pristine commit.
+  const referenceRoot = join(scratch, 'reference');
+  mkdirSync(referenceRoot);
+  const referenceArchive = join(scratch, 'reference.tar');
+  execFileSync('git', ['archive', '--output', referenceArchive, 'cdb6c18']);
+  execFileSync('tar', ['-xf', referenceArchive, '-C', referenceRoot]);
+  symlinkSync(resolve('node_modules'), join(referenceRoot, 'node_modules'), 'dir');
+  run([resolve('node_modules/astro/bin/astro.mjs'), 'build'], referenceRoot);
+  const referenceBuilt = JSON.parse(readFileSync(join(referenceRoot, 'dist/server/wrangler.json'), 'utf8'));
+  const referenceConfig = join(scratch, 'reference.json');
+  writeFileSync(referenceConfig, JSON.stringify({ ...referenceBuilt, main: resolve(referenceRoot, 'dist/server', referenceBuilt.main), assets: { ...referenceBuilt.assets, directory: resolve(referenceRoot, 'dist/client') }, d1_databases: [] }));
+  const reference = await start(referenceConfig, join(scratch, 'reference-store'), 44323);
   for (const server of [d1, fallback]) {
-    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket', '/admin/tournaments/test-cup/matches']) {
+    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket', '/admin/tournaments/test-cup/matches','/admin/tournaments/test-cup/roster']) {
       for (const method of ['GET', 'POST']) {
         const denied = await fetch(server.url + path, { method, redirect: 'manual', ...(method === 'POST' ? { headers: { origin: server.url, 'content-type': 'application/x-www-form-urlencoded' }, body: 'revision=test' } : {}) });
         assert.equal(denied.status, 403, `Built admin must be closed: ${method} ${path}`);
@@ -100,7 +112,7 @@ try {
     if (path === '/bracket-generator/') {
       for (const id of ['count-form','selection','settings','preview','custom-team-form','custom-team-name','custom-team-list','regenerate','confirm-draw','unlock-draw','download-draw','copy-draw']) assert.ok(live.includes(`id="${id}"`),`Generator control ${id}`);
       assert.match(live,/never saved to the database/);
-    } else equalHTML(live, original, `Legacy/runtime HTML ${path}`);
+    } else equalHTML(live, ['/map-randomizer/', '/veto/'].includes(path) ? await html(reference.url, path) : original, `Legacy/runtime HTML ${path}`);
     for (const [, url] of live.matchAll(/(?:src|href)="(\/(?:_astro\/|_image\?)[^"]+)"/g)) assets.add(url.replaceAll('&amp;', '&'));
   }
   for (const url of assets) assert.equal((await fetch(`${d1.url}${url}`)).status, 200, url);

@@ -13,7 +13,7 @@ catch (error) { console.error('[admin] Tournament list failed', error); unavaila
   {unavailable ? <p role="alert" class="admin-error">Could not load tournaments from staging. Check the database connection and migrations, then reload.</p> : tournaments.length === 0 ?
     <section class="admin-empty"><h2>No tournaments yet</h2><p>Create a tournament to begin its setup.</p></section> :
     <ul class="admin-list">{tournaments.map(tournament => <li>
-      <div><h2><a href={`/admin/tournaments/${tournament.id}/setup`}>{tournament.name}</a></h2><p>{tournament.start_date} to {tournament.end_date}</p><p>{tournament.region} · {tournament.format}</p></div>
-      <div class="admin-row-end"><span class={`status-badge status-${tournament.status}`}>{tournament.status}</span><a href={`/admin/tournaments/${tournament.id}/setup`}>Open setup</a></div>
+      <div><h2><a href={`/admin/tournaments/${tournament.id}`}>{tournament.name}</a></h2><p>{tournament.start_date} to {tournament.end_date}</p><p>{tournament.region} · {tournament.format}</p></div>
+      <div class="admin-row-end"><span class={`status-badge status-${tournament.status}`}>{tournament.status}</span><a href={`/admin/tournaments/${tournament.id}`}>Open tournament</a></div>
     </li>)}</ul>}
 </AdminLayout>

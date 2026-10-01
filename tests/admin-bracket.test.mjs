@@ -8,11 +8,12 @@ import { readBracketState, officialDraw, confirmOfficialBracket, readBracketForm
 import { generateSharedBracket } from '../src/utils/bracket-engine.mjs';
 const secret='a'.repeat(64);
 async function fixture(count=13) {
-  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8'));
+  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8'));
   sqlite.exec("INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('test-cup','Test Cup','2026-10-01','2026-10-02','upcoming','single-elimination')");
   const db={hook:null,prepare(sql){let values=[];return {bind(...args){values=args;return this;},async all(){const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {success:true,results:sqlite.prepare(sql).all(...args)};}};},async batch(statements){if(statements.length>3&&this.hook){const hook=this.hook;this.hook=null;hook();}sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
   await saveSetup(db,'test-cup',setupForm(await readSetup(db,'test-cup')));
   for(let i=1;i<=count;i++){sqlite.prepare('INSERT INTO teams(id,name,tag,region) VALUES(?,?,?,?)').run(`t${i}`,`Team ${i}`,`T${i}`,'ID');sqlite.prepare('INSERT INTO tournament_teams VALUES(?,?)').run('test-cup',`t${i}`);}
+  for(let i=1;i<=count;i++)for(let n=1;n<=5;n++){const id=`p${i}-${n}`;sqlite.prepare('INSERT INTO players(id,name,current_ign) VALUES(?,?,?)').run(id,id,id);sqlite.prepare('INSERT INTO tournament_rosters VALUES(?,?,?,?,?)').run('test-cup',`t${i}`,id,id,n);}
   return {sqlite,db};
 }
 function validateOpening(b,count){const stage=b.tournament.data.stages[0];const opening=b.draw.filter(e=>e.roundId===stage.rounds[0].id);assert.equal(stage.byes.length,16-count);assert.equal(opening.length,8);const ids=opening.flatMap(e=>[e.team1,e.team2].filter(Boolean));assert.equal(ids.length,count);assert.equal(new Set(ids).size,count);assert.ok(opening.every(e=>e.team1&&(e.team2||e.kind==='bye')));}

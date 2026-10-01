@@ -4,6 +4,7 @@ export const cfgTemplate = {
   stage_id: 'playoffs', stage_name: 'Playoffs', format: 'single-elimination',
   bracket_size: '16', series_type: 'fixed-maps', map_count: '3',
   final_map_rule: 'random', action_seconds: '20', reserve_seconds: '90',
+  bronze_match: '1',
   rounds: [
     { id: 'top-16', name: 'Top 16', sort_order: '1', placement: '' },
     { id: 'quarter-final', name: 'Quarter Final', sort_order: '2', placement: '' },
@@ -12,7 +13,15 @@ export const cfgTemplate = {
     { id: 'final', name: 'Final', sort_order: '5', placement: '1' },
   ],
 };
-const stageFields = ['stage_id', 'stage_name', 'format', 'bracket_size', 'series_type', 'map_count', 'final_map_rule', 'action_seconds', 'reserve_seconds'];
+const stageFields = ['stage_id', 'stage_name', 'format', 'bracket_size', 'series_type', 'map_count', 'final_map_rule', 'action_seconds', 'reserve_seconds', 'bronze_match'];
+export function eliminationRounds(size, bronze = false) {
+  if (![4, 8, 16, 32].includes(Number(size))) throw new AdminError('Choose a bracket size of 4, 8, 16 or 32.');
+  const names = [[32, 'top-32', 'Top 32'], [16, 'top-16', 'Top 16'], [8, 'quarter-final', 'Quarter Final'], [4, 'semi-final', 'Semi Final']];
+  const rounds = names.filter(([slots]) => slots <= Number(size)).map(([, id, name]) => ({ id, name, placement: '' }));
+  if (bronze) rounds.push({ id: 'bronze', name: 'Bronze Match', placement: '3' });
+  rounds.push({ id: 'final', name: 'Final', placement: '1' });
+  return rounds.map((round, index) => ({ ...round, sort_order: String(index + 1) }));
+}
 export const setupSnapshotSQL = `json_object(
   'stages', json((SELECT json_group_array(json_array(id, name, format, bracket_size, series_type, map_count, final_map_rule, action_seconds, reserve_seconds))
     FROM (SELECT * FROM tournament_stages WHERE tournament_id = ?1 ORDER BY id))),
@@ -20,7 +29,8 @@ export const setupSnapshotSQL = `json_object(
     FROM (SELECT * FROM tournament_rounds WHERE tournament_id = ?1 ORDER BY stage_id, sort_order, id))),
   'status', (SELECT status FROM tournaments WHERE id = ?1),
   'matches', (SELECT count(*) FROM matches WHERE tournament_id = ?1),
-  'byes', (SELECT count(*) FROM tournament_byes WHERE tournament_id = ?1)
+  'byes', (SELECT count(*) FROM tournament_byes WHERE tournament_id = ?1),
+  'participants', json((SELECT json_group_array(team_id) FROM (SELECT team_id FROM tournament_teams WHERE tournament_id = ?1 ORDER BY team_id)))
 )`;
 const snapshotSQL = setupSnapshotSQL;
 
@@ -53,6 +63,7 @@ export function setupForm(setup, useTemplate = false) {
     Object.assign(form, { stage_name: name, format, bracket_size: String(bracketSize), series_type: seriesType,
       map_count: String(mapCount), final_map_rule: finalMap ?? '', action_seconds: action == null ? '' : String(action),
       reserve_seconds: reserve == null ? '' : String(reserve),
+      bronze_match: setup.state.rounds.some(round => round[4] === 3) ? '1' : '',
       rounds: setup.state.rounds.filter(round => round[0] === stage[0]).map(([, id, name, order, placement]) => ({ id, name, sort_order: String(order), placement: placement == null ? '' : String(placement) })),
     });
   }
@@ -61,31 +72,10 @@ export function setupForm(setup, useTemplate = false) {
 
 export async function readSetupForm(request) {
   const input = await readAdminForm(request, { maxBytes: 16384,
-    allowedField: key => [...stageFields, 'revision', 'intent', 'remove_round'].includes(key) || /^rounds\.(?:[0-9]|1[0-5])\.(?:id|name|sort_order|placement)$/.test(key),
+    allowedField: key => [...stageFields, 'revision', 'intent'].includes(key),
   });
-  const rounds = [];
-  for (let i = 0; i < 16; i++) {
-    if (Object.keys(input).some(key => key.startsWith(`rounds.${i}.`))) {
-      if (i !== rounds.length) throw new AdminError('Round fields must be consecutive. Reload the setup form.');
-      rounds.push(Object.fromEntries(['id', 'name', 'sort_order', 'placement'].map(key => [key, input[`rounds.${i}.${key}`] ?? ''])));
-    }
-  }
   return { ...Object.fromEntries(stageFields.map(key => [key, input[key] ?? ''])), revision: input.revision ?? '',
-    intent: input.intent ?? 'save', remove_round: input.remove_round, rounds };
-}
-
-export function editRoundForm(input) {
-  if (input.remove_round !== undefined) {
-    if (!/^(?:[0-9]|1[0-5])$/.test(input.remove_round) || Number(input.remove_round) >= input.rounds.length || input.rounds.length <= 1) {
-      throw new AdminError('Keep at least one round.');
-    }
-    input.rounds.splice(Number(input.remove_round), 1);
-    input.rounds.forEach((round, index) => { round.sort_order = String(index + 1); });
-  } else if (input.intent === 'add-round') {
-    if (input.rounds.length >= 16) throw new AdminError('A setup can contain at most 16 rounds.');
-    input.rounds.push({ id: '', name: '', sort_order: String(input.rounds.length + 1), placement: '' });
-  } else if (input.intent !== 'save') throw new AdminError('Unknown setup action.');
-  return input;
+    intent: input.intent ?? 'save', rounds: [] };
 }
 
 function cleanName(value, label, max) {
@@ -106,8 +96,10 @@ export function validateSetup(input) {
   if (input.format !== 'single-elimination') throw new AdminError('Setup v1 supports single-elimination format.');
   if (input.series_type !== 'fixed-maps') throw new AdminError('Setup v1 supports fixed-maps series.');
   if (input.final_map_rule !== 'random') throw new AdminError('Setup v1 supports random final maps.');
-  const bracket_size = integer(input.bracket_size, 'Bracket size', 2, 256);
-  if (!Number.isInteger(Math.log2(bracket_size))) throw new AdminError('Bracket size must be a power of two (2, 4, 8, 16, 32, 64, 128, or 256).');
+  const bracket_size = integer(input.bracket_size, 'Bracket size', 4, 32);
+  if (![4, 8, 16, 32].includes(bracket_size)) throw new AdminError('Choose a bracket size of 4, 8, 16 or 32.');
+  if (!['', '1', undefined].includes(input.bronze_match)) throw new AdminError('Invalid Bronze Match option.');
+  input = { ...input, rounds: eliminationRounds(bracket_size, input.bronze_match === '1') };
   const map_count = integer(input.map_count, 'Maps per match', 1, 15);
   if (map_count % 2 !== 1) throw new AdminError('Maps per match must be odd to avoid tied series.');
   const action_seconds = integer(input.action_seconds, 'Action time', 1, 300);
@@ -136,6 +128,7 @@ export async function saveSetup(db, tournamentId, input) {
   if (!current) throw new AdminError('Tournament not found.', 404);
   if (current.locked) throw new AdminError('Setup is read-only once matches or byes exist, the tournament has started, or multiple stages are present.', 409);
   const value = validateSetup(input);
+  if (current.state.participants.length > value.bracket_size) throw new AdminError('Remove participants before reducing the bracket below the registered team count.', 409);
   if (input.revision !== current.revision) throw new AdminError('Setup has changed since this form was opened. Reload before saving.', 409);
   if (current.state.stages[0] && current.state.stages[0][0] !== value.id) throw new AdminError('The saved stage ID cannot be changed.', 409);
   // A stale snapshot sets name to NULL, causing the existing NOT NULL constraint to abort the whole D1 batch before any changes.

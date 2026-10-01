@@ -1,0 +1,21 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import { readRosterState } from '../../../../admin/roster.mjs';
+const db = requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let state; let message = '';
+try { state = await readRosterState(db,Astro.params.id); if (!state) Astro.response.status = 404; }
+catch(error) { message = error instanceof AdminError ? error.message : 'Could not load tournament state. Reload to try again.'; Astro.response.status = error instanceof AdminError ? error.status : 503; }
+const base = state ? `/admin/tournaments/${state.tournament.id}` : '';
+const next = !state?.ready ? ['Setup','/setup'] : state.participants.length < 2 ? ['Participants','/participants'] : !state.roster.ready ? ['Roster','/roster'] : ['Bracket','/bracket'];
+---
+<AdminLayout title="Tournament Overview" workspace={state}>
+  {message && <p class="admin-error" role="alert">{message}</p>}
+  {!state ? <><h1>Tournament unavailable</h1><a href="/admin">Return to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Overview</p></div><span>{state.tournament.status}</span></header>
+    <dl class="admin-defaults"><div><dt>Bracket capacity</dt><dd>{state.stage?.[3] ?? 'Setup required'}</dd></div><div><dt>Participants</dt><dd>{state.participants.length} teams</dd></div><div><dt>Saved rosters</dt><dd>{state.roster.teams.filter(team => team.ready).length} / {state.participants.length} ready</dd></div><div><dt>Editing</dt><dd>{state.locked ? 'Read-only' : 'Open'}</dd></div></dl>
+    {state.locked ? <section class="admin-next"><h2>Tournament is read-only</h2><p>Setup, Participants and Roster remain available in the sidebar. Matches are viewable; scheduling and results editing are not available yet.</p><a href={`${base}/matches`}>View Matches</a></section> : <section class="admin-next"><h2>{next[0] === 'Bracket' ? 'Ready for Official Draw' : `Review ${next[0]}`}</h2><p>Save setup and participant rosters before drawing. Confirming the official bracket locks Setup, Participants and Roster.</p><a class="admin-button" href={`${base}${next[1]}`}>Open {next[0]}</a></section>}
+  </>}
+</AdminLayout>

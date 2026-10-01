@@ -1,139 +1,89 @@
 # Tournament admin development
 
-Run `node scripts/admin-dev.mjs` from the repository root, then open
-`http://127.0.0.1:4321/admin`. This connects to **remote cflesportsid-staging**.
-Cloudflare credentials must already be available to Wrangler.
+Run `node scripts/admin-dev.mjs --local` for offline verification. The launcher
+writes ignored `.generated/admin-dev.json` and binds a loopback server. It never
+edits local `wrangler.jsonc`. Without `--local` it connects explicitly to remote
+`cflesportsid-staging`; do not use remote mode for integration tests.
 
-The launcher reads the existing local `wrangler.jsonc` and writes an ignored
-`.generated/admin-dev.json`. It requires the `cflesportsid_staging` binding to
-name `cflesportsid-staging`. Both bindings in the generated development config
-point to staging, including the public read binding. It never edits the user's
-configuration and never binds production. Inspect the generated config before
-starting if changing database bindings.
+All admin routes require development mode, loopback host and the staging binding.
+Built/deployed admin rejects GET and POST. Matching Origin, strict URL-encoded
+fields, bounded bodies, snapshot revisions and guarded atomic batches protect
+writes. Do not expose the development server through tunnels or LAN listeners.
 
-For offline verification use `node scripts/admin-dev.mjs --local`. Initialize
-that local simulation with:
+## Tournament workspace
 
-```sh
-npx wrangler d1 migrations apply cflesportsid-staging --config .generated/admin-dev.json --local --persist-to .wrangler/state
-```
+The six persistent links are Overview, Setup, Participants, Roster, Bracket and
+Matches. Preparation pages remain clickable before confirmation. Saving stays
+on the current page. Dependencies explain missing setup, participants or roster
+readiness. Confirming the official bracket hard locks Setup, Participants and
+Roster on the server; their saved records remain viewable.
 
-The remote staging database must already have the repository's migrations.
-No migrations, seeds, or test records are written remotely by tests.
+Setup offers 4, 8, 16 or 32 slots. Normal elimination rounds are generated:
+4 starts at Semi Final, 8 at Quarter Final, 16 at Top 16 and 32 at Top 32.
+All finish with Semi Final and Final. Optional Bronze Match is generated before
+Final with third-place placement. Normal rounds cannot be added, renamed or
+removed manually. Reducing capacity below registered teams is rejected.
+The existing preset, map settings and timers remain available. Map pools and
+veto steps are preserved. Unsupported multi-stage/started states are read-only.
 
-## Boundary
+Participants shows a searchable team directory with registration status,
+checkboxes, selection controls and bulk Add Selected / Remove Selected actions.
+Each action saves immediately; Create Team is a secondary disclosure. Capacity,
+duplicate, missing-team and stale-state checks are retained. Partial membership
+including zero teams can be saved during preparation. Removing a participant
+removes only its tournament membership and roster, never its global team/players.
+New staging teams/players do not automatically publish legacy public profiles.
 
-All `/admin` routes require Astro development mode, a loopback request host,
-and the explicit staging binding. The launcher binds the server to `127.0.0.1`.
-Forwarded client addresses and mismatching forwarded hosts are rejected. Astro's
-internal proxy sends a matching forwarded host, which is accepted. Do not expose this development server through
-a tunnel, reverse proxy, or LAN listener. Host checks alone are not authentication;
-the loopback-only listener and development-only compilation are part of the boundary.
-Builds and deployed previews reject admin access even on localhost. No public
-write API or custom password login is provided.
+Adding a team copies its latest earlier tournament roster, ordered by tournament
+start date, end date and ID. Only tournaments with a strictly earlier start date
+qualify. The copy includes Tournament IGN and positions and is independent of
+its source. Retained teams are not recopied. A player already registered here
+stays with that team; conflicting copied entries are skipped and readiness shows
+which teams require review. No current global team roster is inferred.
 
-POST creation additionally requires a matching Origin and same-origin browser
-request metadata, URL-encoded data, and a body no larger than 4 KiB. SQL uses bound
-parameters. Remote admin access must wait for an identity boundary such as
-Cloudflare Access with server-verified tokens; enabling it by removing the local
-checks is unsafe.
+For a team with no saved roster, Roster offers an explicit copy action. A usable
+latest earlier tournament roster takes precedence; otherwise Copy Current Team
+Roster uses players.current_team_id and current_ign as a starting draft. Copy
+performs no writes, retains other workspace edits, and shows Unsaved. Review team
+assignments and editable Tournament IGN, then Save Roster to persist this tournament
+only. Duplicate players, more than seven players, stale revisions and locks reject
+the action. Saved rosters remain authoritative on reload; copy cannot replace them.
+Current team data is never presented or written as an S1/S2 historical roster.
+Historical backfill remains deferred; this fallback requires no new migration.
 
-Run `node scripts/admin-types.mjs` after binding changes to regenerate the scoped
-Cloudflare types. They live in a module so Workers DOM types do not replace browser DOM types.
+Roster is one workspace for every participant team. Existing player, Create
+Player, removal and team moves edit the full draft; Save Roster persists it
+atomically. Team changes can be combined, including swaps. Tournament IGN is
+inline and changes only the tournament snapshot. New players receive their
+initial global IGN at creation; existing global IGN/team records are preserved.
+One player can represent only one team in the same tournament. UID is optional
+but unique when supplied. Partial rosters save; every team needs 5–7 saved players
+before drawing or confirming a bracket. Forms support 32 teams × 7 players and
+are limited to 256 KiB. Unadded player drafts must be added before saving.
 
-## First workflow
-
-`/admin` reads tournament records directly from staging without a JSON fallback.
-`/admin/tournaments/new` asks for the name and both confirmed dates because the
-existing schema requires non-null dates. It never supplies S3 dates.
-
-Creation sets game `crossfire-legends`, region `ID`, status `upcoming`, format
-`single-elimination`, and winner `NULL` on the server. Names produce stable slugs;
-names with no ASCII slug produce a deterministic digest ID. Slug collisions return
-409 without overwriting a record. Successful creation redirects with 303 to
-`/admin/tournaments/{id}/setup`, which opens the setup form.
-
-With JavaScript, a valid submission announces that the record is being saved,
-disables the submit button, and prevents repeat submit events. Server errors and
-history navigation restore a usable form. Native HTML validation runs before
-this enhancement; without JavaScript, the normal POST form still works.
+Migration 0003 already exists and is applied to remote staging. No new migration
+is needed for this revision; do not rewrite 0003 or apply/reseed remotely.
+S1/S2 backfill remains out of scope. Player IDs/UID and tournament snapshots can
+support a later reviewed import from separate season sources.
 
 ## Verification
 
-Run `npm test`, `npm run data:check`, and `npm run build`. For HTTP verification,
-start the offline launcher, apply local migrations as above, then run:
+Run `npm test`, `node node_modules/typescript/bin/tsc --noEmit`,
+`npm run data:check` and `npm run build`. For offline HTTP verification initialize
+only the local simulation with repository migrations, then run:
 
 ```sh
 ADMIN_TEST_URL=http://127.0.0.1:4321 ADMIN_TEST_LOCAL=1 node tests/admin-pages.integration.mjs
+ADMIN_TEST_URL=http://127.0.0.1:4321 ADMIN_TEST_LOCAL=1 node tests/admin-roster-prefill.integration.mjs
 ```
 
-This test creates clearly named verification records in the offline database.
-Never point it at a remote staging session. The historical frontend parity suite
-uses commit `a91700d` and predates the committed S&D Economy changes in
-`map-randomizer` and `veto`. For this change those two temporary baseline pages
-were refreshed from pristine commit `cdb6c18`; no repository data or baseline
-test source was altered.
-
-## Tournament Setup v1
-
-The setup form starts with the editable Clash for Glory preset: Playoffs,
-single elimination, 16 slots, fixed three maps, random final map, action 20 seconds,
-reserve 90 seconds, and Top 16 / Quarter Final / Semi Final / Bronze Match (3) /
-Final (1). Existing saved values load by default. Applying the preset changes only
-the form until Save & Continue is pressed.
-
-Stage and round names, bracket size, map count, timers, round order, and placement
-are editable. Version 1 supports the existing single-elimination / fixed-maps /
-random modes. Brackets must be powers of two, map counts odd, and progression
-rounds must match the bracket depth. Final is last; optional Bronze immediately
-precedes it. Round IDs remain stable when names change. Add/remove buttons post
-only form edits, work without JavaScript, and never write to D1.
-
-Saving writes one stage and its rounds in a single D1 transaction, then redirects
-with 303 to `/admin/tournaments/{id}/participants`. Participants v1 continues with
-team selection and creation, as described below. Bracket generation remains a
-future workflow. Map pools, veto steps, and S&D/Economy
-rulesets are not edited here.
-
-Setup posts use the same local-only staging boundary, exact Origin checking,
-strict form fields, and a 16 KiB body limit. Existing stage IDs cannot change.
-Started tournaments, setups with matches/byes, and multiple-stage tournaments are
-read-only. Snapshot revisions reject stale tabs; a transaction-level snapshot
-constraint also prevents races between validation and writing. Failed writes
-roll back stage and round changes together. Existing stage map pools and veto
-steps are preserved.
-
-## Participants v1
-
-The page loads the saved `tournament_teams` and the existing team catalog from
-staging. Its counter uses the saved stage's bracket size. Pick an existing team
-(search is available with JavaScript), or open Create New Team and enter a name,
-tag, and region (default ID). New teams get stable IDs from their names; existing
-team names, tags, region, roster, and history are not overwritten.
-The public team list/profiles still read the legacy Astro content collection;
-creating a staging team makes it available to admin, but does not publish a new
-public profile or add it to source JSON. Public team-read migration is outside
-Participants v1.
-
-Add/remove actions update the posted form draft only. They work without
-JavaScript and do not write to D1. New team drafts are visibly marked unsaved.
-Save & Continue atomically creates new teams and replaces tournament memberships,
-then redirects with 303 to `/admin/tournaments/{id}/bracket`. That read-only
-checkpoint shows saved participants; it does not draw, seed, or generate a
-bracket. At least two teams are required to continue; fewer than the bracket's
-capacity are allowed. No BYEs or roster/player records are created here.
-
-Duplicate teams, existing-name/slug collisions, missing team IDs, and counts over
-the bracket size are rejected. Team names require 3–120 readable characters,
-tags 1–20, and region 2–32. Unadded selections/new-team input must be added to the
-list before saving, so typing into the entry panel is not silently discarded.
-
-Participants use the same local-only staging/Origin boundary. POST bodies are
-URL-encoded, exact fields, at most 256 rows and 512 KiB. Only setup/participants
-and tournament creation allow POST; the bracket checkpoint is read-only. Built
-admin routes remain closed. Started tournaments, multiple stages, or existing
-matches/byes block edits. Revisions cover setup, participants, status, and bracket
-state; a transaction-level constraint rejects races after the initial read.
-Failed saves roll back new-team creation and membership changes together. Removing
-a participant never deletes its global team. Remote staging test writes are not
-performed by the verification suite.
+The HTTP suites create clearly named records only in that offline database.
+The prefill suite needs repository seed data and verifies ChaTraMue's five and
+DEMIGOD KAGE's seven current players, no-write copies, draft review and saved reload.
+`npm run test:frontend` compares 194 public pages with D1 and JSON fallback,
+checks generator controls and production admin denial. Historical pages use
+pristine `a91700d`; map-randomizer/veto compare against pristine `cdb6c18`, which
+contains their existing economy controls. Both reference builds are generated
+locally by the suite. It does not change source data or remote databases.
+Scheduling/results editing, stored draw history and bracket reset remain later
+work. See `docs/admin-bracket.md` for official draw semantics.

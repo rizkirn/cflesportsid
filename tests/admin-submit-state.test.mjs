@@ -39,19 +39,17 @@ test('cancelled submit stays idle and pageshow restores a usable form after hist
   assert.equal(page.submit().defaultPrevented, false);
 });
 
-for (const [page, noun, editStatus] of [['setup', 'Setup', 'Updating round fields. Please wait.'], ['participants', 'Participants', 'Updating participant list. Please wait.']]) {
-test(`${page} save and edits guard repeat submission and reset both save buttons`, () => {
-  const source=readFileSync(`src/pages/admin/tournaments/[id]/${page}.astro`,'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+test('workspace forms preserve named action controls, guard repeat submission and reset on pageshow', () => {
+  const source=readFileSync('src/layouts/AdminLayout.astro','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
   const form=new EventTarget(); const window=new EventTarget(); const attributes=new Map();
-  const buttons=[{disabled:false,textContent:'Save & Continue'},{disabled:false,textContent:'Save & Continue'}];
+  const buttons=[0,1].map(()=>({disabled:false,attributes:new Map(),setAttribute(k,v){this.attributes.set(k,v);},removeAttribute(k){this.attributes.delete(k);}}));
   const status={textContent:''}; form.querySelectorAll=()=>buttons; form.querySelector=()=>status;
   form.setAttribute=(k,v)=>attributes.set(k,v); form.removeAttribute=k=>attributes.delete(k);
-  vm.runInContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,vm.createContext({document:{querySelector:selector=>selector===`.${page==='setup'?'setup':'participant'}-form`?form:null},window}));
+  vm.runInContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,vm.createContext({document:{querySelectorAll:()=>[form]},window}));
   const submit=submitter=>{const e=new Event('submit',{cancelable:true}); Object.defineProperty(e,'submitter',{value:submitter}); form.dispatchEvent(e); return e;};
-  assert.equal(submit(buttons[1]).defaultPrevented,false); assert.equal(status.textContent,`Saving ${noun.toLowerCase()}. Please wait.`);
-  assert.ok(buttons.every(b=>b.disabled && b.textContent===`Saving ${noun}...`)); assert.equal(submit(buttons[0]).defaultPrevented,true);
-  window.dispatchEvent(new Event('pageshow')); assert.ok(buttons.every(b=>!b.disabled && b.textContent==='Save & Continue'));
-  const edit={}; assert.equal(submit(edit).defaultPrevented,false); assert.equal(status.textContent,editStatus);
+  assert.equal(submit(buttons[1]).defaultPrevented,false); assert.equal(status.textContent,'Saving changes. Please wait.');
+  assert.ok(buttons.every(b=>!b.disabled && b.attributes.get('aria-disabled')==='true')); assert.equal(submit(buttons[0]).defaultPrevented,true);
+  window.dispatchEvent(new Event('pageshow')); assert.ok(buttons.every(b=>!b.disabled && !b.attributes.has('aria-disabled')));
+  const edit={}; assert.equal(submit(edit).defaultPrevented,false); assert.equal(status.textContent,'Saving changes. Please wait.');
   assert.equal(attributes.get('aria-busy'),'true'); window.dispatchEvent(new Event('pageshow')); assert.equal(attributes.has('aria-busy'),false);
 });
-}

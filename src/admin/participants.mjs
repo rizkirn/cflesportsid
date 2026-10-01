@@ -1,9 +1,10 @@
 import { AdminError, readAdminForm, tournamentId } from './tournaments.mjs';
 import { setupSnapshotSQL } from './setup.mjs';
+import { rosterRowsSQL } from './roster-snapshot.mjs';
 
 export const participantSnapshotSQL = `json_object('setup', json(${setupSnapshotSQL}), 'participants', json((
   SELECT json_group_array(team_id) FROM (SELECT team_id FROM tournament_teams WHERE tournament_id = ?1 ORDER BY team_id)
-)))`;
+)), 'roster', json(${rosterRowsSQL}))`;
 const snapshotSQL = participantSnapshotSQL;
 const rowFields = ['id', 'name', 'tag', 'region'];
 const idPattern = /^[a-z0-9-]{1,120}$/;
@@ -23,7 +24,7 @@ export async function readParticipantState(db, id) {
   const revision = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   const teams = result[2].results;
   const ready = state.setup.stages.length === 1 && state.setup.rounds.length > 0 && stage[2] === 'single-elimination'
-    && Number.isInteger(stage[3]) && stage[3] >= 2 && stage[3] <= 256 && Number.isInteger(Math.log2(stage[3]));
+    && [4, 8, 16, 32].includes(stage[3]);
   return { tournament, teams, snapshot, revision, stage, ready,
     participants: state.participants.map(id => teams.find(team => team.id === id)).filter(Boolean),
     locked: tournament.status !== 'upcoming' || state.setup.matches > 0 || state.setup.byes > 0 || state.setup.stages.length > 1 };
@@ -34,7 +35,7 @@ export function participantForm(state) {
 }
 export async function readParticipantForm(request) {
   const fields = await readAdminForm(request, { maxBytes: 524288,
-    allowedField: key => ['revision', 'intent', 'remove_participant', 'team_id', 'new_name', 'new_tag', 'new_region'].includes(key)
+    allowedField: key => ['revision', 'intent', 'remove_participant', 'team_id', 'new_name', 'new_tag', 'new_region'].includes(key) || /^selected\.[a-z0-9-]{1,120}$/.test(key)
       || /^participants\.(?:0|[1-9][0-9]{0,2})\.(?:id|name|tag|region)$/.test(key) && Number(key.split('.')[1]) < 256,
   });
   const participants = [];
@@ -44,6 +45,7 @@ export async function readParticipantForm(request) {
     participants.push(Object.fromEntries(rowFields.map(key => [key, fields[`participants.${index}.${key}`] ?? ''])));
   }
   return { revision: fields.revision ?? '', participants, intent: fields.intent ?? 'save', remove_participant: fields.remove_participant,
+    selected: Object.keys(fields).filter(key => key.startsWith('selected.') && fields[key] === '1').map(key => key.slice(9)),
     team_id: fields.team_id ?? '', new_name: fields.new_name ?? '', new_tag: fields.new_tag ?? '', new_region: fields.new_region ?? 'ID' };
 }
 function text(value, label, min, max) {
@@ -82,7 +84,18 @@ export function requireEditableParticipants(state, revision) {
 }
 export async function editParticipantForm(form, state) {
   requireEditableParticipants(state, form.revision);
-  if (form.remove_participant !== undefined) {
+  if (form.intent === 'add-selected' || form.intent === 'remove-selected') {
+    if (!form.selected?.length) throw new AdminError('Select at least one team.');
+    if (form.selected.some(id => !state.teams.some(team => team.id === id))) throw new AdminError('A selected team no longer exists. Reload.');
+    if (form.intent === 'add-selected') {
+      const candidate = [...form.participants, ...form.selected.map(id => state.teams.find(team => team.id === id))];
+      await validateParticipantRows(candidate, state); form.participants = candidate;
+    } else {
+      if (form.selected.some(id => !form.participants.some(team => team.id === id))) throw new AdminError('Select registered participants to remove.');
+      form.participants = form.participants.filter(team => !form.selected.includes(team.id));
+    }
+    form.selected = [];
+  } else if (form.remove_participant !== undefined) {
     if (!/^(0|[1-9][0-9]{0,2})$/.test(form.remove_participant) || Number(form.remove_participant) >= form.participants.length) throw new AdminError('Select a participant to remove.');
     form.participants.splice(Number(form.remove_participant), 1);
   } else if (form.intent === 'add-existing') {
@@ -104,12 +117,20 @@ export async function saveParticipants(db, id, form) {
   if (!state) throw new AdminError('Tournament not found.', 404);
   requireEditableParticipants(state, form.revision);
   const teams = await validateParticipantRows(form.participants, state);
-  if (teams.length < 2) throw new AdminError('Add at least two teams before continuing to Bracket Setup.');
   // The NOT NULL constraint aborts the entire transaction if setup, participants, or bracket state changed after the read.
   const statements = [db.prepare(`UPDATE tournaments SET name = CASE WHEN (${snapshotSQL}) = ?2 THEN name ELSE NULL END WHERE id = ?1`).bind(id, state.snapshot),
     ...teams.filter(team => team.isNew).map(team => db.prepare(`INSERT INTO teams (id, name, tag, region) VALUES (?, ?, ?, ?)`).bind(team.id, team.name, team.tag, team.region)),
-    db.prepare('DELETE FROM tournament_teams WHERE tournament_id = ?').bind(id),
-    ...teams.map(team => db.prepare('INSERT INTO tournament_teams (tournament_id, team_id) VALUES (?, ?)').bind(id, team.id)),
+    ...state.participants.filter(team => !teams.some(selected => selected.id === team.id)).map(team => db.prepare('DELETE FROM tournament_teams WHERE tournament_id = ? AND team_id = ?').bind(id,team.id)),
+    ...teams.map(team => db.prepare('INSERT INTO tournament_teams (tournament_id, team_id) VALUES (?, ?) ON CONFLICT(tournament_id,team_id) DO NOTHING').bind(id, team.id)),
+    ...teams.filter(team => !state.participants.some(current => current.id === team.id)).map(team => db.prepare(`
+      INSERT INTO tournament_rosters(tournament_id,team_id,player_id,ign_snapshot,position)
+      SELECT ?1, ?2, r.player_id, r.ign_snapshot, r.position FROM tournament_rosters r
+      WHERE r.team_id = ?2 AND r.tournament_id = (
+        SELECT t.id FROM tournaments t WHERE t.start_date < (SELECT start_date FROM tournaments WHERE id = ?1)
+          AND EXISTS(SELECT 1 FROM tournament_rosters previous WHERE previous.tournament_id = t.id AND previous.team_id = ?2)
+        ORDER BY t.start_date DESC, t.end_date DESC, t.id DESC LIMIT 1
+      ) AND NOT EXISTS(SELECT 1 FROM tournament_rosters registered WHERE registered.tournament_id = ?1 AND registered.player_id = r.player_id)
+      ORDER BY r.position`).bind(id, team.id)),
   ];
   try {
     const result = await db.batch(statements);

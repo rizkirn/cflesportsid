@@ -10,8 +10,6 @@ const secret = (env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
 try {
   state = await readBracketState(db, Astro.params.id);
   if (!state) Astro.response.status = 404;
-  else if (!state.ready) return Astro.redirect(`/admin/tournaments/${state.tournament.id}/setup`, 303);
-  if (state && !state.locked && state.participants.length < 2 && Astro.request.method === 'GET') return Astro.redirect(`/admin/tournaments/${state.tournament.id}/participants`,303);
   if (state && Astro.request.method === 'POST') {
     const form = await readBracketForm(Astro.request);
     drawCount = form.draw_count ?? '1';
@@ -26,14 +24,14 @@ try {
   else { console.error('[admin] Bracket operation failed', error); message = 'Could not load or save the bracket. Reload to check the saved state before trying again.'; failed = !state; Astro.response.status = 503; }
 }
 const teamName = (id?: string) => state?.participants.find(team => team.id === id)?.name ?? id;
-const enough = state && state.participants.length >= Math.max(2, state.stage![3] / 2) && state.participants.length <= state.stage![3];
+const enough = state && state.stage && state.participants.length >= Math.max(2, state.stage[3] / 2) && state.participants.length <= state.stage[3];
 ---
-<AdminLayout title="Bracket Setup">
+<AdminLayout title="Bracket Setup" workspace={state}>
   {message && <p role="alert" class="admin-error">{message}</p>}
   {!failed && (!state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Back to Participants</a></header>
-    <p class="admin-help">{state.participants.length} teams · {state.stage?.[3]} slots · {state.stage![3] - state.participants.length} BYEs</p>
-    {state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup and Participants are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Back to Roster</a></header>
+    <p class="admin-help">{state.participants.length} teams · {state.stage?.[3] ?? 0} slots · {(state.stage?.[3] ?? 0) - state.participants.length} BYEs</p>
+    {state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup, Participants and Roster are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !state.ready ? <section class="admin-next"><h2>Setup required</h2><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Complete Setup</a></section> : !state.roster.ready ? <section class="admin-next"><h2>Roster incomplete</h2><p>Every participant needs 5 to 7 players with a saved tournament IGN before Official Draw.</p><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Complete Tournament Roster</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
       <form method="POST" class="admin-form" data-bracket-form>
         <input type="hidden" name="revision" value={state.revision} />
         <input type="hidden" name="intent" value="draw" />
@@ -44,8 +42,10 @@ const enough = state && state.participants.length >= Math.max(2, state.stage![3]
         <p class="admin-submit-status" role="status"></p>
       </form>
       {preview && <>
-        <p class="admin-help" role="status">{preview.draws.length} draws completed. Review every draw below. Nothing has been saved.</p>
-        {preview.draws.map((bracket, index) => <section class="official-draw" aria-labelledby={`draw-${index+1}`}>
+        <p class="admin-help" role="status">{preview.draws.length} draws completed. Select a draw to review it. Nothing has been saved. Only Draw {preview.draws.length} can be confirmed.</p>
+        <div class="draw-sequence" aria-label="Draw history">
+        {preview.draws.map((bracket, index) => <details name="official-draw-history" class="official-draw" data-final={index === preview.draws.length-1 ? 'true' : 'false'} open={index === preview.draws.length-1}>
+          <summary>Draw {index+1}{index === preview.draws.length-1 ? ' · Final candidate' : ''}</summary>
           <h2 id={`draw-${index+1}`}>Draw {index+1} of {preview.draws.length}{index === preview.draws.length-1 ? ': Final candidate' : ''}</h2>
           <div class="official-rounds" style={`--official-round-count:${bracket.tournament.data.stages[0].rounds.length}`}>{bracket.tournament.data.stages[0].rounds.map(round => <section>
             <h3>{round.name}</h3><ol class="official-slots">{bracket.draw.filter(entry=>entry.roundId===round.id).map(entry=><li>
@@ -54,11 +54,12 @@ const enough = state && state.participants.length >= Math.max(2, state.stage![3]
               <span>{entry.kind==='bye' ? 'Advances automatically' : teamName(entry.team2) ?? `${round.placement===3?'Loser':'Winner'} of Match ${entry.source2}`}</span>
             </li>)}</ol>
           </section>)}</div>
-        </section>)}
-        <form method="POST" class="admin-form admin-next" data-bracket-form>
+        </details>)}
+        </div>
+        <form method="POST" class="admin-form admin-next" data-bracket-form data-confirm-form>
           <input type="hidden" name="revision" value={state.revision} /><input type="hidden" name="intent" value="confirm" /><input type="hidden" name="token" value={preview.token} />
           <h2>Confirm Draw {preview.draws.length}</h2>
-          <p class="admin-help">This saves BYEs, matches and progression to staging, then locks Setup and Participants. Match dates initially use the saved tournament start date, {state.options?.startDate}; individual schedules still need review. The preview expires in two hours or when the development server restarts.</p>
+          <p class="admin-help">This saves BYEs, matches and progression to staging, then locks Setup, Participants and Roster. Match dates initially use the saved tournament start date, {state.options?.startDate}; individual schedules still need review. The preview expires in two hours or when the development server restarts.</p>
           <button class="admin-button" type="submit">Confirm Official Bracket</button><p class="admin-submit-status" role="status"></p>
         </form>
       </>}
@@ -66,6 +67,12 @@ const enough = state && state.participants.length >= Math.max(2, state.stage![3]
   </>)}
 </AdminLayout>
 <script>
+  const history = Array.from(document.querySelectorAll<HTMLDetailsElement>('[name="official-draw-history"]'));
+  const confirmation = document.querySelector<HTMLFormElement>('[data-confirm-form]');
+  history.forEach(draw => draw.addEventListener('toggle', () => {
+    if (draw.open) history.filter(other => other !== draw).forEach(other => { other.open = false; });
+    if (confirmation) confirmation.hidden = !history.some(entry => entry.open && entry.dataset.final === 'true');
+  }));
   document.querySelectorAll<HTMLFormElement>('[data-bracket-form]').forEach(form => {
     let pending = false;
     const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');

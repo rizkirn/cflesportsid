@@ -1,7 +1,7 @@
 import type { D1Database } from './bindings.mjs';
 import type { ParticipantState } from './participants.mjs';
 import type { SharedBracket, SharedBracketOptions } from '../utils/bracket-engine.mjs';
-export interface BracketState extends ParticipantState { options: SharedBracketOptions | null; }
+export interface BracketState extends ParticipantState { options: SharedBracketOptions | null; roster: {ready:boolean;teams:{id:string;count:number;ready:boolean}[]}; }
 export interface BracketForm { revision?: string; draw_count?: string; intent?: string; token?: string; }
 export function readBracketState(db: D1Database, id: string | undefined): Promise<BracketState | null>;
 export function readBracketForm(request: Request): Promise<BracketForm>;

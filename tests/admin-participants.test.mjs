@@ -5,10 +5,10 @@ import { readFileSync } from 'node:fs';
 import { readSetup, setupForm, saveSetup } from '../src/admin/setup.mjs';
 import { readParticipantState, participantForm, validateParticipantRows, editParticipantForm, saveParticipants, readParticipantForm } from '../src/admin/participants.mjs';
 async function fixture() {
-  const sqlite = new DatabaseSync(':memory:'); sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8'));
+  const sqlite = new DatabaseSync(':memory:'); sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8'));
   sqlite.exec("INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('test-cup','Test Cup','2026-01-01','2026-01-01','upcoming','single-elimination'); INSERT INTO teams(id,name,tag,region) VALUES('alpha','Alpha','ALP','ID'),('beta','Beta','BET','ID')");
-  const db={ hook:null, prepare(sql) { let values=[]; return { bind(...args) {values=args;return this;}, async all() { const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values; return {success:true,results:sqlite.prepare(sql).all(...args)}; } }; }, async batch(statements) {
-    if (statements.length>3 && this.hook) { const hook=this.hook; this.hook=null;hook(); }
+  const db={ hook:null, prepare(sql) { let values=[]; return { sql, bind(...args) {values=args;return this;}, async all() { const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values; return {success:true,results:sqlite.prepare(sql).all(...args)}; } }; }, async batch(statements) {
+    if (statements.some(s=>s.sql.startsWith('UPDATE tournaments')) && this.hook) { const hook=this.hook; this.hook=null;hook(); }
     sqlite.exec('BEGIN'); try { const results=[]; for (const s of statements) results.push(await s.all()); sqlite.exec('COMMIT'); return results; } catch(error) {sqlite.exec('ROLLBACK');throw error;}
   }};
   await saveSetup(db,'test-cup',setupForm(await readSetup(db,'test-cup')));
@@ -64,7 +64,8 @@ test('stale setup, concurrent changes and new-team collisions cannot overwrite s
 test('unprepared, started, matched, and BYE brackets reject all participant writes',async()=>{
   const {sqlite,db}=await fixture();try {
     let state=await readParticipantState(db,'test-cup');let form=participantForm(state);form.participants=[existing('alpha'),existing('beta')];
-    await assert.rejects(saveParticipants(db,'test-cup',{...form,participants:[]}),/at least two/);
+    await saveParticipants(db,'test-cup',{...form,participants:[]});
+    state=await readParticipantState(db,'test-cup'); assert.equal(state.participants.length,0); form=participantForm(state);
     sqlite.exec("INSERT INTO matches(id,tournament_id,stage_id,round_id,bracket_slot,date,status) VALUES('m','test-cup','playoffs','top-16',1,'2026-01-01','upcoming')");
     assert.equal((await readParticipantState(db,'test-cup')).locked,true);await assert.rejects(saveParticipants(db,'test-cup',form),e=>e.status===409);
     sqlite.exec("DELETE FROM matches; INSERT INTO tournament_byes VALUES('test-cup','playoffs','bye','top-16',1,'alpha')");await assert.rejects(saveParticipants(db,'test-cup',form),e=>e.status===409);

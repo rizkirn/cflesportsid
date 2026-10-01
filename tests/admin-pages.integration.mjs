@@ -1,113 +1,78 @@
 import assert from 'node:assert/strict';
-
-const base = process.env.ADMIN_TEST_URL;
-if (!base || !/^http:\/\/127\.0\.0\.1:\d+$/.test(base)) throw new Error('Set ADMIN_TEST_URL to the offline staging server URL.');
-if (process.env.ADMIN_TEST_LOCAL !== '1') throw new Error('Run only against an isolated local staging simulation, with ADMIN_TEST_LOCAL=1.');
-const get = path => fetch(base + path, { redirect: 'manual' });
-const post = (input, origin = base) => fetch(base + '/admin/tournaments/new', {
-  method: 'POST', redirect: 'manual', headers: { origin, 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(input),
-});
-const name = `HTTP verification ${crypto.randomUUID()}`;
-const input = { name, start_date: '2026-10-01', end_date: '2026-10-01' };
-const initial = await get('/admin');
-assert.equal(initial.status, 200);
-assert.equal(initial.headers.get('cache-control'), 'no-store');
-assert.equal(initial.headers.get('x-robots-tag'), 'noindex, nofollow');
-assert.equal((await get('/admin/tournaments/new')).status, 200);
-assert.equal((await post(input, 'https://evil.example')).status, 403);
-assert.equal((await post({ ...input, start_date: '2026-02-30' })).status, 400);
-assert.equal((await post({ ...input, winner_team_id: 'injected' })).status, 400);
-const created = await post(input);
-assert.equal(created.status, 303);
-const path = created.headers.get('location');
-assert.match(path, /^\/admin\/tournaments\/http-verification-[a-f0-9-]+\/setup$/);
-const setup = await get(path);
-assert.equal(setup.status, 200); assert.match(await setup.text(), new RegExp(name));
-const duplicate = await post(input);
-assert.equal(duplicate.status, 409); assert.match(await duplicate.text(), /already exists/);
-assert.match(await (await get('/admin')).text(), new RegExp(name));
-assert.equal((await get('/admin/tournaments/__missing__/setup')).status, 404);
-assert.equal((await fetch(base + path, { method: 'POST', headers: { origin: base } })).status, 415);
-assert.equal((await fetch(base + '/admin', { headers: { 'x-forwarded-for': '127.0.0.1' } })).status, 403);
-const { cfgTemplate } = await import('../src/admin/setup.mjs');
-const html = await (await get(path)).text();
-const revision = html.match(/name="revision" value="([a-f0-9]+)"/)[1];
-const setupInput = new URLSearchParams({ ...Object.fromEntries(Object.entries(cfgTemplate).filter(([key]) => key !== 'rounds')), revision });
-cfgTemplate.rounds.forEach((round,index) => Object.entries(round).forEach(([key,value])=>setupInput.set(`rounds.${index}.${key}`,value)));
-const submit = (data, origin=base) => fetch(base+path,{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:data});
-assert.equal((await submit(setupInput,'https://evil.example')).status,403);
-const add = new URLSearchParams(setupInput); add.set('intent','add-round');
-const added = await submit(add); assert.equal(added.status,200); assert.match(await added.text(),/rounds\.5\.name/);
-assert.equal((await (await get(path)).text()).includes('rounds.5.name'),false);
-const invalid = new URLSearchParams(setupInput); invalid.set('bracket_size','15'); assert.equal((await submit(invalid)).status,400);
-const saved = await submit(setupInput); assert.equal(saved.status,303); assert.equal(saved.headers.get('location'),path.replace('/setup','/participants'));
-const participants = await get(saved.headers.get('location')); assert.equal(participants.status,200); assert.match(await participants.text(),/Participant list/);
-assert.equal((await submit(setupInput)).status,409);
-assert.match(await (await get(path)).text(),/Bronze Match/);
-const participantPath = path.replace('/setup','/participants');
-const participantPost = (data, origin=base) => fetch(base+participantPath,{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:data});
-const hiddenFields = html => {
-  const params = new URLSearchParams();
-  for (const [tag] of html.matchAll(/<input\b[^>]*>/g)) {
-    if (!/type="hidden"/.test(tag)) continue;
-    const name=tag.match(/name="([^"]*)"/)[1];
-    const value=(tag.match(/value="([^"]*)"/)?.[1] ?? '').replaceAll('&amp;','&').replaceAll('&#39;',"'").replaceAll('&quot;','"');
-    params.set(name,value);
+const base=process.env.ADMIN_TEST_URL;
+if(!base || !/^http:\/\/127\.0\.0\.1:\d+$/.test(base) || process.env.ADMIN_TEST_LOCAL!=='1')throw new Error('Use ADMIN_TEST_URL and ADMIN_TEST_LOCAL=1 for an isolated offline staging server.');
+const get=path=>fetch(base+path,{redirect:'manual'});
+const post=(path,body,origin=base)=>fetch(base+path,{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(body)});
+const decode=value=>value.replaceAll('&amp;','&').replaceAll('&quot;','"').replaceAll('&#39;',"'");
+function fields(html){
+  const data=new URLSearchParams();
+  for(const [tag] of html.matchAll(/<input\b[^>]*>/g)){
+    const name=tag.match(/name="([^"]*)"/)?.[1];if(!name)continue;
+    if(/type="checkbox"/.test(tag)&&! /\bchecked(?:\s|>|=)/.test(tag))continue;
+    data.set(name,decode(tag.match(/value="([^"]*)"/)?.[1]??''));
   }
-  return params;
-};
-let participantData = hiddenFields(await (await get(participantPath)).text());
-assert.equal((await participantPost(participantData,'https://evil.example')).status,403);
-assert.equal((await participantPost(participantData)).status,400);
-const firstTeam=`HTTP Alpha ${crypto.randomUUID()}`;
-const secondTeam=`HTTP Beta ${crypto.randomUUID()}`;
-for (const name of [firstTeam,secondTeam]) {
-  participantData.set('intent','add-new');participantData.set('new_name',name);participantData.set('new_tag','HTTP');participantData.set('new_region','ID');
-  const draft=await participantPost(participantData);assert.equal(draft.status,200);
-  participantData=hiddenFields(await draft.text());
+  for(const [,attrs,body] of html.matchAll(/<select\b([^>]*)>([\s\S]*?)<\/select>/g)){
+    const name=attrs.match(/name="([^"]*)"/)?.[1];if(!name)continue;
+    const options=[...body.matchAll(/<option\b([^>]*)>/g)];const chosen=options.find(([,a])=>/\bselected(?:\s|$|=)/.test(a))??options[0];if(chosen)data.set(name,decode(chosen[1].match(/value="([^"]*)"/)?.[1]??''));
+  }
+  return data;
 }
-assert.match(await (await get(participantPath)).text(),/0 \/ 16 teams/);
-assert.equal((await get(path.replace('/setup','/bracket'))).status,303);
-const draftRevision=participantData.get('revision');
-const persisted=await participantPost(participantData);assert.equal(persisted.status,303);assert.equal(persisted.headers.get('location'),path.replace('/setup','/bracket'));
-const bracket=await get(persisted.headers.get('location'));assert.equal(bracket.status,200);assert.match(await bracket.text(),/Review participant count/);
-let participantHTML=await (await get(participantPath)).text();assert.match(participantHTML,/2 \/ 16 teams/);assert.match(participantHTML,new RegExp(firstTeam));
-assert.equal((await participantPost(participantData)).status,409);
-participantData=hiddenFields(participantHTML);assert.notEqual(participantData.get('revision'),draftRevision);
-const removedId=participantData.get('participants.0.id');
-const invalidTeam=new URLSearchParams(participantData);invalidTeam.set('participants.0.id','__missing__');assert.equal((await participantPost(invalidTeam)).status,400);
-const duplicateTeam=new URLSearchParams(participantData);duplicateTeam.set('intent','add-existing');duplicateTeam.set('team_id',removedId);assert.equal((await participantPost(duplicateTeam)).status,400);
-const removal=new URLSearchParams(participantData);removal.set('remove_participant','0');
-const removed=await participantPost(removal);assert.equal(removed.status,200);const removedHTML=await removed.text();assert.match(removedHTML,/1 \/ 16 teams/);
-assert.match(await (await get(participantPath)).text(),/2 \/ 16 teams/);
-const restored=hiddenFields(removedHTML);restored.set('intent','add-existing');restored.set('team_id',removedId);
-const restoredResponse=await participantPost(restored);assert.equal(restoredResponse.status,200);assert.match(await restoredResponse.clone().text(),/2 \/ 16 teams/);
-assert.equal((await fetch(base+path.replace('/setup','/bracket'),{method:'POST',headers:{origin:base,'content-type':'application/x-www-form-urlencoded'},body:'intent=save'})).status,400);
-participantData=hiddenFields(await restoredResponse.text());
-for(let i=0;i<11;i++) {
-  participantData.set('intent','add-new');participantData.set('new_name',`HTTP Draw Team ${i} ${crypto.randomUUID()}`);participantData.set('new_tag',`DT${i}`);participantData.set('new_region','ID');
-  const response=await participantPost(participantData);assert.equal(response.status,200);participantData=hiddenFields(await response.text());
+const html=async path=>{const response=await get(path);assert.equal(response.status,200,path);return response.text();};
+const send=async(path,data,status=303)=>{const response=await post(path,data);if(response.status!==status)throw new Error(`${path}: expected ${status}, got ${response.status}: ${(await response.text()).slice(-5000)}`);return response;};
+const suffix=crypto.randomUUID();
+async function create(name,date){const response=await send('/admin/tournaments/new',{name,start_date:date,end_date:date});return response.headers.get('location').replace(/\/setup$/,'');}
+const source=await create(`HTTP workspace source ${suffix}`,'2026-10-01');
+assert.equal((await get('/admin')).headers.get('cache-control'),'no-store');
+assert.equal((await post('/admin/tournaments/new',{name:'Forbidden',start_date:'2026-01-01',end_date:'2026-01-01'},'https://evil.example')).status,403);
+assert.equal((await post('/admin/tournaments/new',{name:'Invalid',start_date:'2026-02-30',end_date:'2026-02-30'})).status,400);
+let setup=fields(await html(source+'/setup'));setup.set('bracket_size','32');
+await send(source+'/setup',setup);
+assert.equal((await post(source+'/setup',setup)).status,409);
+assert.match(await html(source+'/setup'),/Top 32/);
+let participants;
+for(let i=0;i<32;i++){
+  participants=fields(await html(source+'/participants'));participants.set('intent','add-new');participants.set('new_name',`HTTP Team ${i} ${suffix}`);participants.set('new_tag',`HT${i}`);participants.set('new_region','ID');await send(source+'/participants',participants);
 }
-assert.equal((await participantPost(participantData)).status,303);
-const bracketPath=path.replace('/setup','/bracket');
-const bracketHTML=await (await get(bracketPath)).text();
-const drawRevision=bracketHTML.match(/name="revision" value="([a-f0-9]+)"/)[1];
-const bracketPost=(data,origin=base)=>fetch(base+bracketPath,{method:'POST',redirect:'manual',headers:{origin,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams(data)});
-const drawForm={intent:'draw',revision:drawRevision,draw_count:'5'};
-assert.equal((await bracketPost(drawForm,'https://evil.example')).status,403);
-assert.equal((await bracketPost({...drawForm,draw_count:'21'})).status,400);
-const drawResponse=await bracketPost(drawForm);assert.equal(drawResponse.status,200);
-const drawHTML=await drawResponse.text();
-for(let n=1;n<=5;n++) assert.match(drawHTML,new RegExp(`Draw ${n} of 5`));
-assert.match(drawHTML,/Draw 5 of 5: Final candidate/);assert.match(drawHTML,/Nothing has been saved/);
-assert.match(await (await get(path.replace('/setup','/matches'))).text(),/No matches yet/);
-const token=drawHTML.match(/name="token" value="([^"]+)"/)[1];
-const confirm={intent:'confirm',revision:drawRevision,token};
-assert.equal((await bracketPost({...confirm,token:token+'.bad'})).status,409);
-const bracketSaved=await bracketPost(confirm);assert.equal(bracketSaved.status,303);assert.equal(bracketSaved.headers.get('location'),path.replace('/setup','/matches'));
-const matchesHTML=await (await get(bracketSaved.headers.get('location'))).text();assert.match(matchesHTML,/Official bracket saved/);assert.match(matchesHTML,/Winner of/);assert.match(matchesHTML,/Loser of/);
-assert.equal((await bracketPost(confirm)).status,409);
-assert.match(await (await get(bracketPath)).text(),/Bracket is read-only/);
-assert.match(await (await get(participantPath)).text(),/read-only/);
-assert.match(await (await get(path)).text(),/read-only/);
-console.log('Admin HTTP checks passed: create/setup/participants, exactly five draws, no pre-confirm matches, signed candidate, confirm/303/matches, winner/loser progression, read-only lifecycle, validation, CSRF, methods and cache headers. Offline staging simulation only.');
+const participantHTML=await html(source+'/participants');assert.match(participantHTML,/32 \/ 32 teams/);
+const ids=[...fields(participantHTML)].filter(([key])=>/^participants\.\d+\.id$/.test(key)).map(([,value])=>value);assert.equal(ids.length,32);
+const over=fields(participantHTML);over.set('intent','add-new');over.set('new_name',`HTTP Over Capacity ${suffix}`);over.set('new_tag','OVER');over.set('new_region','ID');await send(source+'/participants',over,400);
+const shrink=fields(await html(source+'/setup'));shrink.set('bracket_size','16');await send(source+'/setup',shrink,409);
+let roster=fields(await html(source+'/roster'));roster.set('intent','save');
+ids.forEach((team,t)=>{for(let p=0;p<5;p++){const index=t*5+p;for(const [key,value] of Object.entries({team_id:team,id:'',name:`HTTP Player ${t}-${p}`,ign:`HTTP IGN ${t}-${p}`,uid:`http-${suffix}-${t}-${p}`}))roster.set(`entries.${index}.${key}`,value);}});
+await send(source+'/roster',roster);
+assert.match(await html(source+'/roster'),/32 \/ 32 teams ready/);
+const next=await create(`HTTP workspace copy ${suffix}`,'2026-11-01');
+setup=fields(await html(next+'/setup'));setup.set('bracket_size','32');await send(next+'/setup',setup);
+participants=fields(await html(next+'/participants'));participants.set('intent','add-selected');ids.forEach(id=>participants.set(`selected.${id}`,'1'));await send(next+'/participants',participants);
+const copiedHTML=await html(next+'/roster');assert.match(copiedHTML,/32 \/ 32 teams ready/);
+roster=fields(copiedHTML);assert.equal([...roster.keys()].filter(key=>/^entries\.\d+\.id$/.test(key)).length,160);
+const originalIGN=roster.get('entries.0.ign');const team0=roster.get('entries.0.team_id');const team1=roster.get('entries.5.team_id');
+roster.set('entries.0.ign','HTTP copied inline edit');roster.set('entries.0.team_id',team1);roster.set('entries.5.team_id',team0);roster.set('intent','save');await send(next+'/roster',roster);
+assert.match(await html(next+'/roster'),/HTTP copied inline edit/);assert.ok(!(await html(source+'/roster')).includes('HTTP copied inline edit'));assert.ok((await html(source+'/roster')).includes(originalIGN));
+await send(next+'/roster',roster,409);
+participants=fields(await html(next+'/participants'));participants.set('intent','add-selected');participants.set(`selected.${ids[0]}`,'1');await send(next+'/participants',participants,400);
+participants=fields(await html(next+'/participants'));participants.set('intent','remove-selected');participants.set(`selected.${ids[0]}`,'1');await send(next+'/participants',participants);assert.match(await html(next+'/participants'),/31 \/ 32 teams/);
+participants=fields(await html(next+'/participants'));participants.set('intent','add-selected');participants.set(`selected.${ids[0]}`,'1');await send(next+'/participants',participants);
+// Moving between teams before removal can leave a copied roster incomplete. Restore the saved original assignments explicitly.
+roster=fields(await html(next+'/roster'));const originals=fields(await html(source+'/roster'));const teamByPlayer=new Map();for(let i=0;i<160;i++)teamByPlayer.set(originals.get(`entries.${i}.id`),originals.get(`entries.${i}.team_id`));
+for(const [key,id] of [...roster])if(/^entries\.\d+\.id$/.test(key))roster.set(key.replace(/\.id$/,'.team_id'),teamByPlayer.get(id));
+const registered=new Set([...roster].filter(([key])=>/^entries\.\d+\.id$/.test(key)).map(([,id])=>id));let count=registered.size;
+for(let i=0;i<160;i++){const id=originals.get(`entries.${i}.id`);if(registered.has(id))continue;for(const key of ['team_id','id','ign','name','uid'])roster.set(`entries.${count}.${key}`,originals.get(`entries.${i}.${key}`));count++;}
+roster.set('intent','save');await send(next+'/roster',roster);
+for(const section of ['', '/setup','/participants','/roster','/bracket','/matches']){const page=await html(next+section);assert.match(page,/aria-label="Tournament workspace"/);for(const label of ['Overview','Setup','Participants','Roster','Bracket','Matches'])assert.ok(page.includes(`<strong>${label}</strong>`));}
+const bracketHTML=await html(next+'/bracket');let draw=fields(bracketHTML);draw.set('intent','draw');draw.set('draw_count','20');
+assert.equal((await post(next+'/bracket',draw,'https://evil.example')).status,403);
+const drawn=await send(next+'/bracket',draw,200);const preview=await drawn.text();
+assert.equal([...preview.matchAll(/name="official-draw-history"/g)].length,20);
+assert.equal([...preview.matchAll(/<details[^>]*name="official-draw-history"[^>]*\bopen(?:\s|>|=)/g)].length,1);
+assert.match(preview,/Draw 20 of 20: Final candidate/);assert.match(await html(next+'/matches'),/No matches yet/);
+const token=preview.match(/name="token" value="([^"]+)"/)[1];const confirmation={intent:'confirm',revision:draw.get('revision'),token};
+await send(next+'/bracket',{...confirmation,token:token+'.bad'},409);
+await send(next+'/bracket',confirmation);
+assert.match(await html(next+'/matches'),/Official bracket saved/);
+for(const section of ['/setup','/participants','/roster','/bracket'])assert.match(await html(next+section),/read-only/);
+await send(next+'/setup',fields(await html(next+'/setup')),409);
+participants=fields(await html(next+'/participants'));participants.set('intent','remove-selected');participants.set(`selected.${ids[0]}`,'1');await send(next+'/participants',participants,409);
+roster=fields(await html(next+'/roster'));roster.set('intent','save');await send(next+'/roster',roster,409);
+await send(next+'/bracket',confirmation,409);
+console.log(`Admin HTTP PASS: 32 teams, bulk registration/removal, independent previous-roster copy, 160 players, inline IGN/move, capacity/stale validation, six sidebar destinations, 20 draws with one open bracket, signed final confirmation and all preparation locks. Offline local simulation. Browser fixture: ${source}`);

@@ -1,5 +1,6 @@
 import { AdminError, readAdminForm } from './tournaments.mjs';
 import { readParticipantState, participantSnapshotSQL } from './participants.mjs';
+import { rosterReadiness } from './roster-snapshot.mjs';
 import { generateSharedBracket } from '../utils/bracket-engine.mjs';
 
 const snapshotSQL = `json_object('participants',json(${participantSnapshotSQL}),'tournament',json((SELECT json_array(id,name,game,region,start_date,end_date,status,format,winner_team_id) FROM tournaments WHERE id=?1)))`;
@@ -36,13 +37,15 @@ export async function readBracketState(db,id) {
   const stage=state.stage;
   const setup=data.participants.setup;
   const options=stage ? { tournamentId:tid,name,game,region,startDate,endDate,teams:state.participants.map(t=>({id:t.id,name:t.name})),stage:{id:stage[0],name:stage[1],format:stage[2],bracketSize:stage[3],series:{type:stage[4],mapCount:stage[5]},rounds:setup.rounds.map(([,id,name,order,placement])=>({id,name,order,...(placement?{placement}:{})})),byes:[]} } : null;
-  return {...state,snapshot,options};
+  return {...state,snapshot,options,roster:rosterReadiness(state.participants,data.participants.roster)};
 }
 function editable(state,revision) {
   if(!state) throw new AdminError('Tournament not found.',404);
   if(!state.ready || state.locked) throw new AdminError('The bracket is read-only. Review Setup and Participants.',409);
+  if(!state.roster.ready) throw new AdminError('Complete every participant roster with 5 to 7 players before Official Draw.',409);
   if(state.revision!==revision) throw new AdminError('Setup or participants changed. Reload before drawing.',409);
   if(state.participants.length < Math.max(2,state.stage[3]/2) || state.participants.length>state.stage[3]) throw new AdminError(`A ${state.stage[3]}-slot bracket needs ${Math.max(2,state.stage[3]/2)} to ${state.stage[3]} participants. Add participants or save a smaller bracket in Setup.`);
+  if (state.stage[3] === 4 && state.participants.length < 4 && state.options.stage.rounds.some(round => round.placement === 3)) throw new AdminError('Bronze Match requires four teams in a 4-slot bracket so both Semi Finals have losing teams. Add teams or turn off Bronze Match in Setup.');
 }
 export async function readBracketForm(request) {
   return readAdminForm(request,{maxBytes:1048576,allowedField:k=>['intent','revision','draw_count','token'].includes(k)});
@@ -59,7 +62,7 @@ export async function officialDraw(state,form,secret,random=secureRandom,now=Dat
 export async function confirmOfficialBracket(db,id,form,secret,now=Date.now()) {
   const payload=await unseal(form.token??'',secret,now);
   const state=await readBracketState(db,id); editable(state,form.revision);
-  if(payload.id!==id || payload.snapshot!==state.snapshot) throw new AdminError('Setup, dates or participants changed. Start a new draw.',409);
+  if(payload.id!==id || payload.snapshot!==state.snapshot) throw new AdminError('Setup, dates, participants or roster changed. Start a new draw.',409);
   const bracket=payload.bracket; const stage=bracket.tournament.data.stages[0];
   // A changing snapshot sets a NOT NULL field to NULL, rolling back the entire D1 batch.
   const statements=[db.prepare(`UPDATE tournaments SET name=CASE WHEN (${snapshotSQL})=?2 THEN name ELSE NULL END WHERE id=?1`).bind(id,state.snapshot),
