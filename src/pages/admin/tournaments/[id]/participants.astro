@@ -1,0 +1,24 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import { requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import { readSetup, readParticipants } from '../../../../admin/setup.mjs';
+const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
+let setup; let participants = []; let failed = false;
+try {
+  setup = await readSetup(db, Astro.params.id);
+  if (!setup) Astro.response.status = 404;
+  else if (!setup.state.stages.length) return Astro.redirect(`/admin/tournaments/${setup.tournament.id}/setup`, 303);
+  else participants = await readParticipants(db, setup.tournament.id);
+} catch (error) { console.error('[admin] Participants failed', error); failed = true; Astro.response.status = 503; }
+---
+<AdminLayout title="Participants">
+  {failed ? <p role="alert" class="admin-error">Could not load participants. Check staging and reload.</p> : !setup ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{setup.tournament.name}</h1><p>Participants</p></div><a href={`/admin/tournaments/${setup.tournament.id}/setup`}>Tournament Setup</a></header>
+    <section class="admin-next"><h2>Setup saved</h2><p>{setup.state.stages[0][1]} · {setup.state.stages[0][3]} slots · {setup.state.stages[0][5]} maps per match</p><p>Participant selection and bracket generation are the next workflow.</p></section>
+    <h2 class="setup-participants">Registered teams</h2>
+    {participants.length ? <ul class="admin-list">{participants.map(team => <li><span>{team.name} ({team.tag})</span></li>)}</ul> : <p class="admin-empty">No teams are registered for this tournament.</p>}
+    <a href="/admin">Back to tournaments</a>
+  </>}
+</AdminLayout>

@@ -14,7 +14,7 @@ export function requireLocalAdmin(request, development, env) {
   return env.cflesportsid_staging;
 }
 
-export async function readCreateForm(request) {
+export async function readAdminForm(request, { maxBytes = 4096, allowedField }) {
   if (request.headers.get('origin') !== new URL(request.url).origin
     || (request.headers.get('sec-fetch-site') && request.headers.get('sec-fetch-site') !== 'same-origin')) {
     throw new AdminError('Reload the form and submit it from this admin page.', 403);
@@ -29,18 +29,22 @@ export async function readCreateForm(request) {
     const { done, value } = await reader.read();
     if (done) break;
     size += value.byteLength;
-    if (size > 4096) { await reader.cancel(); throw new AdminError('The form is too large.', 413); }
+    if (size > maxBytes) { await reader.cancel(); throw new AdminError('The form is too large.', 413); }
     chunks.push(value);
   }
   const bytes = new Uint8Array(size); let offset = 0;
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   const form = new URLSearchParams(new TextDecoder().decode(bytes));
   for (const key of form.keys()) {
-    if (!['name', 'start_date', 'end_date'].includes(key) || form.getAll(key).length !== 1) {
+    if (!allowedField(key) || form.getAll(key).length !== 1) {
       throw new AdminError('Unexpected or repeated form fields.');
     }
   }
   return Object.fromEntries(form);
+}
+
+export async function readCreateForm(request) {
+  return readAdminForm(request, { allowedField: key => ['name', 'start_date', 'end_date'].includes(key) });
 }
 
 export function validateTournament(input) {

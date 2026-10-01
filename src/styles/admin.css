@@ -26,3 +26,18 @@
 .admin-defaults dd { overflow-wrap: anywhere; }
 .admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
 @media (max-width: 540px) { .admin-page { padding-block: 1.25rem 2rem; } .admin-dates, .admin-defaults { grid-template-columns: 1fr; } .admin-list li { align-items: flex-start; flex-direction: column; } .admin-row-end { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 1rem; } }
+.setup-form { max-width: 960px; }
+.setup-template { margin-bottom: 2rem; }
+.setup-template h2, .setup-stage > legend, .setup-rounds > legend, .setup-participants { font-family: var(--font-heading); font-size: 1.6rem; }
+.setup-stage, .setup-rounds { border: 0; padding: 0; margin: 0 0 2rem; min-width: 0; }
+.setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.25rem; margin-top: 1rem; }
+.setup-round { display: grid; grid-template-columns: minmax(0, 2fr) minmax(80px, .65fr) minmax(0, 1.2fr) auto; align-items: end; gap: 1rem; border: 1px solid var(--border); background: var(--bg-card); padding: 1rem; margin-bottom: 1.25rem; min-width: 0; }
+.setup-round legend { padding-inline: .4rem; font-weight: 600; }
+.admin-form select { width: 100%; min-width: 0; min-height: 48px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-hover); padding: .7rem; font: inherit; border-radius: var(--radius); color-scheme: dark; }
+.admin-outline { min-height: 48px; padding: .7rem 1rem; border: 1px solid var(--border-hover); border-radius: var(--radius); background: var(--bg-secondary); color: var(--text-primary); font: inherit; cursor: pointer; }
+.admin-page :is(select, button):focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 4px; }
+.setup-participants { margin-top: 2rem; }
+@media (max-width: 760px) { .setup-round { grid-template-columns: repeat(2, minmax(0, 1fr)); } .setup-round > div:first-of-type { grid-column: 1 / -1; } }
+@media (max-width: 540px) { .setup-grid { grid-template-columns: 1fr; } .setup-round { gap: .75rem; } .setup-round button { grid-column: 1 / -1; } }
+
+.setup-save-top { margin-bottom: 2rem; }

@@ -38,3 +38,18 @@ test('cancelled submit stays idle and pageshow restores a usable form after hist
   assert.equal(page.attributes.has('aria-busy'), false); assert.equal(page.status.textContent, '');
   assert.equal(page.submit().defaultPrevented, false);
 });
+
+test('setup save and round edits guard repeat submission and reset both save buttons', () => {
+  const source=readFileSync('src/pages/admin/tournaments/[id]/setup.astro','utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+  const form=new EventTarget(); const window=new EventTarget(); const attributes=new Map();
+  const buttons=[{disabled:false,textContent:'Save & Continue'},{disabled:false,textContent:'Save & Continue'}];
+  const status={textContent:''}; form.querySelectorAll=()=>buttons; form.querySelector=()=>status;
+  form.setAttribute=(k,v)=>attributes.set(k,v); form.removeAttribute=k=>attributes.delete(k);
+  vm.runInContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,vm.createContext({document:{querySelector:()=>form},window}));
+  const submit=submitter=>{const e=new Event('submit',{cancelable:true}); Object.defineProperty(e,'submitter',{value:submitter}); form.dispatchEvent(e); return e;};
+  assert.equal(submit(buttons[1]).defaultPrevented,false); assert.equal(status.textContent,'Saving setup. Please wait.');
+  assert.ok(buttons.every(b=>b.disabled && b.textContent==='Saving Setup...')); assert.equal(submit(buttons[0]).defaultPrevented,true);
+  window.dispatchEvent(new Event('pageshow')); assert.ok(buttons.every(b=>!b.disabled && b.textContent==='Save & Continue'));
+  const edit={}; assert.equal(submit(edit).defaultPrevented,false); assert.equal(status.textContent,'Updating round fields. Please wait.');
+  assert.equal(attributes.get('aria-busy'),'true'); window.dispatchEvent(new Event('pageshow')); assert.equal(attributes.has('aria-busy'),false);
+});

@@ -20,7 +20,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
     });
   }
-  const allowed = context.url.pathname.replace(/\/$/, '') === '/admin/tournaments/new' ? ['GET', 'HEAD', 'POST'] : ['GET', 'HEAD'];
+  const path = context.url.pathname.replace(/\/$/, '');
+  const canPost = path === '/admin/tournaments/new' || /^\/admin\/tournaments\/[a-z0-9-]{1,120}\/setup$/.test(path);
+  const allowed = canPost ? ['GET', 'HEAD', 'POST'] : ['GET', 'HEAD'];
   if (!allowed.includes(context.request.method)) {
     return new Response('Method not allowed.', { status: 405, headers: { ...headers, Allow: allowed.join(', ') } });
   }

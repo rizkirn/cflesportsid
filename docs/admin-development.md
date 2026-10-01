@@ -51,8 +51,7 @@ Creation sets game `crossfire-legends`, region `ID`, status `upcoming`, format
 `single-elimination`, and winner `NULL` on the server. Names produce stable slugs;
 names with no ASCII slug produce a deterministic digest ID. Slug collisions return
 409 without overwriting a record. Successful creation redirects with 303 to
-`/admin/tournaments/{id}/setup`, which displays the saved record. Team registration,
-seeding, and bracket editing are future workflows and have no inactive controls.
+`/admin/tournaments/{id}/setup`, which opens the setup form.
 
 With JavaScript, a valid submission announces that the record is being saved,
 disables the submit button, and prevents repeat submit events. Server errors and
@@ -74,3 +73,32 @@ uses commit `a91700d` and predates the committed S&D Economy changes in
 `map-randomizer` and `veto`. For this change those two temporary baseline pages
 were refreshed from pristine commit `cdb6c18`; no repository data or baseline
 test source was altered.
+
+## Tournament Setup v1
+
+The setup form starts with the editable Clash for Glory preset: Playoffs,
+single elimination, 16 slots, fixed three maps, random final map, action 20 seconds,
+reserve 90 seconds, and Top 16 / Quarter Final / Semi Final / Bronze Match (3) /
+Final (1). Existing saved values load by default. Applying the preset changes only
+the form until Save & Continue is pressed.
+
+Stage and round names, bracket size, map count, timers, round order, and placement
+are editable. Version 1 supports the existing single-elimination / fixed-maps /
+random modes. Brackets must be powers of two, map counts odd, and progression
+rounds must match the bracket depth. Final is last; optional Bronze immediately
+precedes it. Round IDs remain stable when names change. Add/remove buttons post
+only form edits, work without JavaScript, and never write to D1.
+
+Saving writes one stage and its rounds in a single D1 transaction, then redirects
+with 303 to `/admin/tournaments/{id}/participants`. This destination displays saved
+setup and any existing registered teams; participant selection and bracket
+generation remain outside this scope. Map pools, veto steps, and S&D/Economy
+rulesets are not edited here.
+
+Setup posts use the same local-only staging boundary, exact Origin checking,
+strict form fields, and a 16 KiB body limit. Existing stage IDs cannot change.
+Started tournaments, setups with matches/byes, and multiple-stage tournaments are
+read-only. Snapshot revisions reject stale tabs; a transaction-level snapshot
+constraint also prevents races between validation and writing. Failed writes
+roll back stage and round changes together. Existing stage map pools and veto
+steps are preserved.

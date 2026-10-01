@@ -6,6 +6,7 @@ export interface Tournament extends TournamentInput {
 }
 export function requireLocalAdmin(request: Request, development: boolean, env: Partial<AdminBindings>): D1Database;
 export function readCreateForm(request: Request): Promise<Record<string, string>>;
+export function readAdminForm(request: Request, options: { maxBytes?: number; allowedField: (key: string) => boolean }): Promise<Record<string, string>>;
 export function validateTournament(input: Record<string, unknown>): TournamentInput;
 export function tournamentId(name: string): Promise<string>;
 export function createTournament(db: D1Database, input: Record<string, unknown>): Promise<string>;
