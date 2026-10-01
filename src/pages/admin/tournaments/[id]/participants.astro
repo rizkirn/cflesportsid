@@ -36,11 +36,11 @@ const available = state?.teams.filter(team => !rows.some(row => row.id === team.
   {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
   {!state || !values ? <><h1>Participants unavailable</h1><a href="/admin">Back to tournaments</a></> : <>
     <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Participants</p></div><span class="participant-counter">{rows.length} / {state.stage?.[3] ?? 0} teams</span></header>
-    {!editable && <p class="admin-next">Participants are read-only. Finish a single-stage setup first; teams cannot change once the tournament starts or matches or byes exist.</p>}
+    {!editable && <p class="admin-next">Participants are read-only. {state.locked ? 'The tournament has started or its official bracket is already saved.' : 'Finish a single-stage setup before adding teams.'}</p>}
     <form method="post" action={`/admin/tournaments/${state.tournament.id}/participants`} class="admin-form participant-form">
       <input type="hidden" name="revision" value={values.revision} />
       {editable && <div class="admin-actions participant-save-top"><button class="admin-button" type="submit" data-save>Save &amp; Continue</button></div>}
-      <p class="admin-help">Add or remove teams, then Save &amp; Continue to save the list. New teams are created when you save. Empty slots remain available for BYE placement in Bracket Setup.</p>
+      {editable && <p class="admin-help">Add or remove teams, then Save &amp; Continue to save the list. New teams are created when you save. Empty slots remain available for BYE placement in Bracket Setup.</p>}
       {notice && <p role="status" class="participant-notice">{notice}</p>}
       <section aria-labelledby="selected-teams"><h2 id="selected-teams">Participant list</h2>
         {rows.length ? <ul class="admin-list participant-list">{rows.map((team,index) => <li>

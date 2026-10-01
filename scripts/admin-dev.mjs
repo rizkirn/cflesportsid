@@ -1,6 +1,7 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import ts from 'typescript';
+import { randomBytes } from 'node:crypto';
 
 const local = process.argv.includes('--local');
 const parsed = ts.parseConfigFileTextToJson('wrangler.jsonc', readFileSync('wrangler.jsonc', 'utf8'));
@@ -27,6 +28,7 @@ writeFileSync(configPath, JSON.stringify({
     migrations_dir: '../migrations', remote: !local,
   })),
 }, null, 2));
+writeFileSync('.generated/.dev.vars', `ADMIN_DRAW_KEY=${randomBytes(32).toString('hex')}\n`, { mode: 0o600 });
 console.log(local ? 'Admin uses a local staging database simulation.' : 'Admin writes to remote cflesportsid-staging. Production is not bound.');
 const child = spawn(process.execPath, ['node_modules/astro/bin/astro.mjs', 'dev', '--host', '127.0.0.1'], {
   stdio: 'inherit', env: { ...process.env, CFL_ADMIN_CONFIG: configPath },

@@ -209,6 +209,31 @@ export function initializeBracketGenerator() {
         rows.some(row => !row.hidden);
     };
 
+    const customTeams = new Map<string, {id: string; name: string}>();
+    const reportCustomError = (message: string) => {
+      const error = element('custom-team-error'); error.textContent = message; error.hidden = !message;
+      input('custom-team-name').setAttribute('aria-invalid', String(Boolean(message)));
+    };
+    element<HTMLFormElement>('custom-team-form').addEventListener('submit', event => {
+      event.preventDefault();
+      const name = input('custom-team-name').value.normalize('NFKC').trim().replace(/ +/g, ' ');
+      if (!name || name.length > 120 || /[\p{Cc}\p{Cf}]/u.test(name)) { reportCustomError('Enter 1 to 120 readable characters for the custom team name.'); return; }
+      if (Array.from(teams.values()).some(team => team.name.normalize('NFKC').trim().replace(/ +/g, ' ').toLowerCase() === name.toLowerCase())) { reportCustomError('A team with this name is already available. Select the existing team.'); return; }
+      if (teams.size >= 1024) { reportCustomError('Remove a custom team before adding another.'); return; }
+      const id = `custom-${crypto.randomUUID()}`;
+      customTeams.set(id,{id,name});
+      teams.set(id,{id,name,logo:'/logos/default.webp',color:'#FF5A1F'});
+      const row = document.createElement('div'); row.className = 'team-option custom-team-option'; row.dataset.search = name.toLowerCase();
+      const label = document.createElement('label');
+      const check = document.createElement('input'); check.type='checkbox'; check.name='team'; check.value=id; check.checked=selected().length<count;
+      const text = document.createElement('span'); text.textContent=name;
+      label.append(check,text); row.append(label); checks.push(check); check.addEventListener('change',updateSelection);
+      const remove = document.createElement('button'); remove.type='button'; remove.textContent='Remove'; remove.setAttribute('aria-label',`Remove ${name}`);
+      remove.addEventListener('click',()=>{checks.splice(checks.indexOf(check),1);customTeams.delete(id);teams.delete(id);row.remove();reportCustomError('');invalidate();updateSelection();filterTeams();input('custom-team-name').focus();});
+      row.append(remove); element('custom-team-list').append(row);
+      input('custom-team-name').value=''; reportCustomError(''); invalidate(); updateSelection(); filterTeams(); input('custom-team-name').focus();
+    });
+
     /* TEAM COUNT */
 
     input(
@@ -974,9 +999,8 @@ export function initializeBracketGenerator() {
             selected(),
 
           availableTeamIds:
-            catalog.teams.map(
-              team => team.id
-            ),
+            Array.from(teams.keys()),
+          teamNames: Object.fromEntries(Array.from(teams.values(),team=>[team.id,team.name])),
 
           tournamentId,
 
@@ -1064,7 +1088,7 @@ export function initializeBracketGenerator() {
 
         exportJson =
           JSON.stringify(
-            bracketExport(bracket),
+            bracketExport(bracket, Array.from(customTeams.values()).filter(team => selected().includes(team.id))),
             null,
             2
           );
@@ -1159,21 +1183,7 @@ export function initializeBracketGenerator() {
       'generator-loading'
     ).hidden = true;
 
-    if (
-      catalog.teams.length < 5
-    ) {
-      reportError(
-        'Add at least 5 teams to the Teams collection before generating a bracket.'
-      );
-
-      return;
-    }
-
-    const defaultCount =
-      Math.min(
-        8,
-        catalog.teams.length
-      );
+    const defaultCount = 8;
 
     input(
       'team-count'

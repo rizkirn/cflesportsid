@@ -5,10 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { generateSharedBracket } from '../src/utils/bracket-engine.mjs';
 import { root, checkData } from '../scripts/data-tools.mjs';
 
 function load(file) {
-  const context = { exports: {} };
+  const context = { exports: {}, require: name => { if(name === './bracket-engine.mjs') return { generateSharedBracket }; throw new Error(name); } };
   const code = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
@@ -134,4 +135,15 @@ test('exported file contents pass the actual collection schemas and reference ch
     assert.deepEqual(result.errors, []);
     assert.deepEqual(result.warnings, []);
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
+});
+
+test('custom team names and temporary IDs survive export without creating team records', () => {
+  const custom = {id:'custom-test-team',name:'Custom Team Name'};
+  const bracket=generateBracket({...options(5,false),selectedTeamIds:[...ids.slice(0,4),custom.id],availableTeamIds:[...ids,custom.id],teamNames:{[custom.id]:custom.name}},seeded(5));
+  const output=bracketExport(bracket,[custom]);
+  assert.equal(output.customTeams[0].name,custom.name);
+  assert.ok(bracket.draw.some(entry=>entry.team1===custom.id||entry.team2===custom.id));
+  assert.ok(!Object.keys(output.files).some(file=>file.startsWith('src/data/teams/')));
+  assert.match(output.importNote,/tag and region/);
+  assert.equal(bracketExport(bracket).customTeams,undefined);
 });

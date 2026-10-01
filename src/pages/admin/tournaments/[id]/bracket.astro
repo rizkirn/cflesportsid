@@ -2,22 +2,81 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { requireLocalAdmin } from '../../../../admin/tournaments.mjs';
-import { readParticipantState } from '../../../../admin/participants.mjs';
+import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import { readBracketState, readBracketForm, officialDraw, confirmOfficialBracket } from '../../../../admin/bracket.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let state; let failed = false;
+let state; let preview; let message = ''; let failed = false; let drawCount = '1';
+const secret = (env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
 try {
-  state = await readParticipantState(db, Astro.params.id);
+  state = await readBracketState(db, Astro.params.id);
   if (!state) Astro.response.status = 404;
   else if (!state.ready) return Astro.redirect(`/admin/tournaments/${state.tournament.id}/setup`, 303);
-  else if (state.participants.length < 2 || state.participants.length > state.stage![3]) return Astro.redirect(`/admin/tournaments/${state.tournament.id}/participants`, 303);
-} catch (error) { console.error('[admin] Bracket checkpoint failed', error); failed = true; Astro.response.status = 503; }
+  if (state && !state.locked && state.participants.length < 2 && Astro.request.method === 'GET') return Astro.redirect(`/admin/tournaments/${state.tournament.id}/participants`,303);
+  if (state && Astro.request.method === 'POST') {
+    const form = await readBracketForm(Astro.request);
+    drawCount = form.draw_count ?? '1';
+    if (form.intent === 'draw') preview = await officialDraw(state, form, secret);
+    else if (form.intent === 'confirm') {
+      await confirmOfficialBracket(db, state.tournament.id, form, secret);
+      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/matches`, 303);
+    } else throw new AdminError('Unknown bracket action.');
+  }
+} catch (error) {
+  if (error instanceof AdminError) { message = error.message; Astro.response.status = error.status; }
+  else { console.error('[admin] Bracket operation failed', error); message = 'Could not load or save the bracket. Reload to check the saved state before trying again.'; failed = !state; Astro.response.status = 503; }
+}
+const teamName = (id?: string) => state?.participants.find(team => team.id === id)?.name ?? id;
+const enough = state && state.participants.length >= Math.max(2, state.stage![3] / 2) && state.participants.length <= state.stage![3];
 ---
 <AdminLayout title="Bracket Setup">
-  {failed ? <p role="alert" class="admin-error">Could not load saved participants. Check staging and reload.</p> : !state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup</p></div><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Back to Participants</a></header>
-    <section class="admin-next"><h2>Saved participants</h2><p>{state.participants.length} / {state.stage?.[3]} teams · {state.stage?.[1]}</p><p>Draw, seeding, and BYE placement will be configured in the next workflow. This page does not generate a bracket.</p></section>
-    <ul class="admin-list">{state.participants.map(team => <li><strong>{team.name}</strong><span>{team.tag} · {team.region}</span></li>)}</ul>
-    <a href="/admin">Back to tournaments</a>
-  </>}
+  {message && <p role="alert" class="admin-error">{message}</p>}
+  {!failed && (!state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
+    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket Setup · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Back to Participants</a></header>
+    <p class="admin-help">{state.participants.length} teams · {state.stage?.[3]} slots · {state.stage![3] - state.participants.length} BYEs</p>
+    {state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup and Participants are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
+      <form method="POST" class="admin-form" data-bracket-form>
+        <input type="hidden" name="revision" value={state.revision} />
+        <input type="hidden" name="intent" value="draw" />
+        <label for="draw-count">How many draws?</label>
+        <input id="draw-count" name="draw_count" type="number" min="1" max="20" value={drawCount} step="1" required aria-describedby="draw-help" />
+        <p id="draw-help" class="admin-help">Choose 1 to 20. Each draw starts from the same saved participant pool. Only the last draw can become the official bracket.</p>
+        <button class="admin-button" type="submit">{preview ? 'Start a new draw sequence' : 'Start Official Draw'}</button>
+        <p class="admin-submit-status" role="status"></p>
+      </form>
+      {preview && <>
+        <p class="admin-help" role="status">{preview.draws.length} draws completed. Review every draw below. Nothing has been saved.</p>
+        {preview.draws.map((bracket, index) => <section class="official-draw" aria-labelledby={`draw-${index+1}`}>
+          <h2 id={`draw-${index+1}`}>Draw {index+1} of {preview.draws.length}{index === preview.draws.length-1 ? ': Final candidate' : ''}</h2>
+          <div class="official-rounds" style={`--official-round-count:${bracket.tournament.data.stages[0].rounds.length}`}>{bracket.tournament.data.stages[0].rounds.map(round => <section>
+            <h3>{round.name}</h3><ol class="official-slots">{bracket.draw.filter(entry=>entry.roundId===round.id).map(entry=><li>
+              <strong>Match {entry.number}{entry.kind==='bye' ? ' · BYE' : ''}</strong>
+              <span>{teamName(entry.team1) ?? `${round.placement===3?'Loser':'Winner'} of Match ${entry.source1}`}</span>
+              <span>{entry.kind==='bye' ? 'Advances automatically' : teamName(entry.team2) ?? `${round.placement===3?'Loser':'Winner'} of Match ${entry.source2}`}</span>
+            </li>)}</ol>
+          </section>)}</div>
+        </section>)}
+        <form method="POST" class="admin-form admin-next" data-bracket-form>
+          <input type="hidden" name="revision" value={state.revision} /><input type="hidden" name="intent" value="confirm" /><input type="hidden" name="token" value={preview.token} />
+          <h2>Confirm Draw {preview.draws.length}</h2>
+          <p class="admin-help">This saves BYEs, matches and progression to staging, then locks Setup and Participants. Match dates initially use the saved tournament start date, {state.options?.startDate}; individual schedules still need review. The preview expires in two hours or when the development server restarts.</p>
+          <button class="admin-button" type="submit">Confirm Official Bracket</button><p class="admin-submit-status" role="status"></p>
+        </form>
+      </>}
+    </>}
+  </>)}
 </AdminLayout>
+<script>
+  document.querySelectorAll<HTMLFormElement>('[data-bracket-form]').forEach(form => {
+    let pending = false;
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    const status = form.querySelector('.admin-submit-status');
+    form.addEventListener('submit', event => {
+      if (pending) { event.preventDefault(); return; }
+      if (event.defaultPrevented) return;
+      pending = true; form.setAttribute('aria-busy','true');
+      if (button) button.disabled = true;
+      if (status) status.textContent = form.querySelector<HTMLInputElement>('[name="intent"]')?.value === 'confirm' ? 'Saving official bracket…' : 'Generating draws…';
+    });
+    window.addEventListener('pageshow',()=>{pending=false;form.removeAttribute('aria-busy');if(button)button.disabled=false;if(status)status.textContent='';});
+  });
+</script>

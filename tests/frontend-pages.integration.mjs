@@ -81,7 +81,7 @@ try {
   const d1 = await start(d1Config, seededStore, 44321);
   const fallback = await start(fallbackConfig, join(scratch, 'empty'), 44322);
   for (const server of [d1, fallback]) {
-    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket']) {
+    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket', '/admin/tournaments/test-cup/matches']) {
       for (const method of ['GET', 'POST']) {
         const denied = await fetch(server.url + path, { method, redirect: 'manual', ...(method === 'POST' ? { headers: { origin: server.url, 'content-type': 'application/x-www-form-urlencoded' }, body: 'revision=test' } : {}) });
         assert.equal(denied.status, 403, `Built admin must be closed: ${method} ${path}`);
@@ -97,7 +97,10 @@ try {
     const live = await html(d1.url, path);
     const backup = await html(fallback.url, path);
     equalHTML(live, backup, `D1/fallback HTML ${path}`);
-    equalHTML(live, original, `Legacy/runtime HTML ${path}`);
+    if (path === '/bracket-generator/') {
+      for (const id of ['count-form','selection','settings','preview','custom-team-form','custom-team-name','custom-team-list','regenerate','confirm-draw','unlock-draw','download-draw','copy-draw']) assert.ok(live.includes(`id="${id}"`),`Generator control ${id}`);
+      assert.match(live,/never saved to the database/);
+    } else equalHTML(live, original, `Legacy/runtime HTML ${path}`);
     for (const [, url] of live.matchAll(/(?:src|href)="(\/(?:_astro\/|_image\?)[^"]+)"/g)) assets.add(url.replaceAll('&amp;', '&'));
   }
   for (const url of assets) assert.equal((await fetch(`${d1.url}${url}`)).status, 200, url);

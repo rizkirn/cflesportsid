@@ -1,9 +1,10 @@
 import { AdminError, readAdminForm, tournamentId } from './tournaments.mjs';
 import { setupSnapshotSQL } from './setup.mjs';
 
-const snapshotSQL = `json_object('setup', json(${setupSnapshotSQL}), 'participants', json((
+export const participantSnapshotSQL = `json_object('setup', json(${setupSnapshotSQL}), 'participants', json((
   SELECT json_group_array(team_id) FROM (SELECT team_id FROM tournament_teams WHERE tournament_id = ?1 ORDER BY team_id)
 )))`;
+const snapshotSQL = participantSnapshotSQL;
 const rowFields = ['id', 'name', 'tag', 'region'];
 const idPattern = /^[a-z0-9-]{1,120}$/;
 export async function readParticipantState(db, id) {

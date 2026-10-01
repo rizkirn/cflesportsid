@@ -96,7 +96,7 @@ const catalog = {
             id="team-count"
             type="number"
             min="5"
-            max={teams.length}
+            max="256"
             step="1"
             required
             aria-describedby="count-help"
@@ -162,6 +162,14 @@ const catalog = {
           Change team count
         </button>
       </div>
+
+      <form id="custom-team-form" class="custom-team-form">
+        <label for="custom-team-name">Custom Team name</label>
+        <div class="custom-team-entry"><input id="custom-team-name" type="text" minlength="1" maxlength="120" required aria-describedby="custom-team-help custom-team-error" /><button type="submit">Add Custom Team</button></div>
+        <p id="custom-team-help" class="field-help">Custom teams stay on this page until refresh. They are never saved to the database. JSON exports include temporary names and IDs; create team records with tag and region before importing.</p>
+        <p id="custom-team-error" class="generator-error" role="alert" hidden></p>
+      </form>
+      <div id="custom-team-list" class="team-options"></div>
 
       <div class="team-search">
         <label for="team-search">

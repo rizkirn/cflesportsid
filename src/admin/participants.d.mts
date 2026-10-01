@@ -9,3 +9,4 @@ export function validateParticipantRows(rows: Team[], state: ParticipantState): 
 export function requireEditableParticipants(state: ParticipantState, revision: string): void;
 export function editParticipantForm(form: ParticipantForm, state: ParticipantState): Promise<ParticipantForm>;
 export function saveParticipants(db: D1Database, id: string, form: ParticipantForm): Promise<number>;
+export const participantSnapshotSQL: string;

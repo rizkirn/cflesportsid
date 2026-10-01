@@ -52,3 +52,26 @@ Reading this as a tournament draw tool for CFL organizers, using CFL's existing 
 ## Verification
 
 `tests/bracket-generator.test.mjs` exercises every team count from 5 through 257, with and without third place, against the existing tournament validator. It checks complete slots, unique entrants, numbering, randomized BYE placement, result progression, collision rejection, and exported data using the actual collection schemas and reference checker.
+
+## Shared engine and temporary custom teams
+
+`src/utils/bracket-engine.mjs` accepts plain `{id,name}` teams and a saved
+single-elimination stage. Both the public generator and admin Official Draw use
+this function. No Astro collection or database is imported by the engine.
+Round topology uses main-round positions, not literal IDs or `sort_order` powers;
+renaming rounds and placing Bronze before Final preserve winner/loser sources.
+BYEs occupy opening match slots with exactly one actual participant. A fixed
+16-slot stage requires 8–16 teams: 13, 12, 9 and 8 entrants produce 3, 4, 7 and
+8 BYEs respectively. Smaller pools require a smaller stage. Third place needs
+played semifinals; a four-slot stage with BYEs cannot produce two semifinal losers.
+
+The public generator supports 5–256 selected teams, mixing catalog entries and
+Custom Team names. Custom entries have random temporary IDs, can be deselected
+or removed, and disappear on refresh. Names are bounded to 120 readable characters
+and duplicate names are rejected after case/Unicode normalization. All custom
+state stays in the page; no write request or database binding is added.
+PNG/image exports use the entered names. Existing-team JSON exports keep their
+original version-1 format. Exports with custom entrants additionally include
+`customTeams` and an `importNote`. The generator does not invent tags, regions
+or roster data: complete the team records and references before importing those
+JSON files. Nothing imports or publishes them automatically.

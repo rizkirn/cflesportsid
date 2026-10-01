@@ -57,3 +57,15 @@
 .admin-page summary:focus-visible { outline: 2px solid var(--accent-hover); outline-offset: 4px; }
 .admin-form [hidden] { display: none; }
 @media (max-width: 540px) { .participant-list li { flex-direction: row; align-items: center; flex-wrap: wrap; } .participant-list li > div { flex: 1 1 180px; } }
+.official-draw { margin-block: 2.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+.official-draw h2, .official-draw h3 { font-family: var(--font-heading); overflow-wrap: anywhere; }
+.official-draw h2 { font-size: 1.8rem; margin-bottom: 1.25rem; }
+.official-rounds { display: grid; grid-template-columns: repeat(var(--official-round-count),minmax(0,1fr)); gap: 1.5rem; align-items: start; }
+.official-slots { list-style: none; padding: 0; }
+.official-slots li { display: grid; gap: .4rem; padding: 1rem; margin-top: .75rem; background: var(--bg-card); border: 1px solid var(--border); overflow-wrap: anywhere; }
+.official-slots strong { color: var(--text-secondary); font-size: .85rem; }
+@media(max-width:540px) { .official-draw { margin-block: 1.75rem; } .official-rounds { gap: 1rem; } }
+
+@media(max-width:1100px) { .official-rounds { grid-template-columns: repeat(3,minmax(0,1fr)); } }
+@media(max-width:760px) { .official-rounds { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media(max-width:540px) { .official-rounds { grid-template-columns: 1fr; } }

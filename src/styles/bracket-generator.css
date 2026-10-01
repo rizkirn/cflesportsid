@@ -84,3 +84,13 @@ body:has(.generator) .site-header { background: #0c0d0f; backdrop-filter: none; 
   .generator .draw-connectors { display: none; }
   .generator .draw-bronze { margin-top: 28px; }
 }
+
+.custom-team-form { margin-bottom: 1.5rem; }
+.custom-team-form > label { display: block; margin-bottom: .5rem; font-weight: 600; }
+.custom-team-entry { display: flex; gap: .75rem; }
+.custom-team-entry input { flex: 1; min-width: 0; min-height: 48px; padding: .75rem; font: inherit; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: var(--radius); }
+.custom-team-entry button, .custom-team-option button { min-height: 44px; padding: .7rem 1rem; font: inherit; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border-hover); border-radius: var(--radius); cursor: pointer; }
+.custom-team-option { justify-content: space-between; min-width: 0; }
+.custom-team-option label { display: flex; align-items: center; gap: .75rem; min-height: 44px; min-width: 0; flex: 1; overflow-wrap: anywhere; }
+#custom-team-list:empty { display: none; }
+@media(max-width:540px) { .custom-team-entry { flex-direction: column; } .custom-team-option { gap: .5rem; } }
