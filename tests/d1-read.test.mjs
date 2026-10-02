@@ -12,7 +12,7 @@ const legacy = [...checkData().data.matches.values()];
 const stats = loadLegacyStatistics();
 function binding() {
   const sql = new DatabaseSync(':memory:');
-  for (const file of ['0001_initial_schema.sql', '0002_preserve_player_rounds.sql']) sql.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
+  for (const file of ['0001_initial_schema.sql', '0002_preserve_player_rounds.sql', '0003_tournament_rosters.sql', '0004_match_detail_edits.sql','0005_walkovers.sql']) sql.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
   execFileSync(process.execPath, ['scripts/generate-d1-seed.mjs']);
   sql.exec(readFileSync(new URL('../.generated/seed-s1-s2.sql', import.meta.url), 'utf8'));
   return { sql, prepare: query => query, batch: async queries => queries.map(query => ({ success: true, results: sql.prepare(query).all() })) };

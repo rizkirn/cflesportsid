@@ -114,7 +114,7 @@ const playerStats = (m.data.playerStats || [])
           : '/players/default.webp'),
 
       ign:
-        player
+        ps.playerId ? (ps.ign || ps.uid) : player
           ? player.data.ign
           : (ps.ign || ps.uid),
 
@@ -177,7 +177,7 @@ function getRoundMVP(roundIdx) {
     uid,
 
     ign:
-      player
+      m.data.playerStats.some(p => p.playerId && p.uid === uid) ? (ps?.ign || uid) : player
         ? player.data.ign
         : (ps ? ps.ign : uid),
 
@@ -283,7 +283,7 @@ const roundMVPs =
 
         <div class="match-detail-score">
           {
-            m.data.status === 'completed' || m.data.status === 'live'
+            m.data.resultType==='walkover' ? 'W/O' : m.data.status === 'completed' || m.data.status === 'live'
               ? `${m.data.score1} - ${m.data.score2}`
               : 'VS'
           }
@@ -324,6 +324,7 @@ const roundMVPs =
 
     </section>
 
+    {m.data.resultType==='walkover'&&<p>W/O · Winner: {winnerId===team1Id?team1Name:team2Name}. No maps were played.</p>}
     {m.data.status === 'completed' && playerStats.length === 0 && roundDetails.length > 0 && (
       <section class="section-spacing" aria-label="Map results">
         <h2 class="section-title">Map results</h2>
@@ -331,6 +332,7 @@ const roundMVPs =
           {roundDetails.map((round, index) => (
             <article class="mvp-card">
               <h3>Map {round.round_number}: {roundMapNames[index]}</h3>
+              {round.mode==='walkover'&&<p>W/O</p>}
               {round.resultNote && <p class="map-result-note">{round.resultNote}</p>}
               <p>{teamsMap.get(round.winnerId)?.data.name ?? 'TBD'} wins</p>
             </article>
@@ -471,7 +473,7 @@ const roundMVPs =
                               </a>
 
                               {
-                                mvp ? (
+                                roundDetails[i]?.mode==='walkover' ? <p class="map-result-note">Map {roundDetails[i].round_number} · W/O · Winner: {roundDetails[i].winnerId===team1Id?team1Name:team2Name}</p> : mvp ? (
 
                                   <div class="map-mvp-player">
 
@@ -554,6 +556,12 @@ const roundMVPs =
                                     No MVP
                                   </p>
 
+                                )
+                              }
+
+                              {
+                                roundDetails[i]?.score1 !== undefined && roundDetails[i]?.score2 !== undefined && (
+                                  <p class="map-result-note">{team1Name} {roundDetails[i].score1}–{roundDetails[i].score2} {team2Name}</p>
                                 )
                               }
 
@@ -723,7 +731,7 @@ const roundMVPs =
                                               ?.round_number
                                         );
 
-                                      return r ? (
+                                      return roundDetails[i]?.mode==='walkover' ? <td>W/O</td> : r ? (
                                         <td class="kda">
 
                                           <span class="kill">
@@ -897,7 +905,7 @@ const roundMVPs =
                                               ?.round_number
                                         );
 
-                                      return r ? (
+                                      return roundDetails[i]?.mode==='walkover' ? <td>W/O</td> : r ? (
                                         <td class="kda">
 
                                           <span class="kill">
@@ -1064,7 +1072,7 @@ const roundMVPs =
     }
 
     {
-      roundDetails.length === 0 && playerStats.length === 0 ? (
+      roundDetails.length === 0 && playerStats.length === 0 && m.data.resultType!=='walkover' ? (
         <div class="empty-state">Match details are not available yet.</div>
       ) : m.data.status !== 'completed' && (
         <div class="empty-state">

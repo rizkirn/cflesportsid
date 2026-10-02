@@ -3,7 +3,8 @@
   "type": "module",
   "version": "1.0.0",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "node scripts/admin-dev.mjs",
+    "dev:admin": "node scripts/admin-dev.mjs",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",

@@ -48,7 +48,7 @@ function editable(state,revision) {
   if (state.stage[3] === 4 && state.participants.length < 4 && state.options.stage.rounds.some(round => round.placement === 3)) throw new AdminError('Bronze Match requires four teams in a 4-slot bracket so both Semi Finals have losing teams. Add teams or turn off Bronze Match in Setup.');
 }
 export async function readBracketForm(request) {
-  return readAdminForm(request,{maxBytes:1048576,allowedField:k=>['intent','revision','draw_count','token','result_revision','match_id','score1','score2'].includes(k)});
+  return readAdminForm(request,{maxBytes:1048576,allowedField:k=>['intent','revision','draw_count','token','result_revision','match_id','score1','score2','walkover_winner'].includes(k)});
 }
 const secureRandom = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
 export async function officialDraw(state,form,secret,random=secureRandom,now=Date.now()) {

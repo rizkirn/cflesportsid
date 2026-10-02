@@ -8,6 +8,11 @@ const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKi
 const context = { exports: {} }; vm.runInNewContext(code, context);
 const { calculateStatistics, emptyStats, kdRatio, kdaRatio, getMapWinner } = context.exports;
 const stats = (kills, deaths, assists, round_number) => ({ kills, deaths, assists, ...(round_number ? { round_number } : {}) });
+test('full-match W/O preserves raw team series records and never creates combat or player records',()=>{
+  const result=calculateStatistics([{id:'wo',data:{status:'completed',resultType:'walkover',team1Id:'a',team2Id:'b',winnerId:'b',score1:0,score2:0,roundDetails:[],playerStats:[]}}]);
+  assert.equal(result.totals.matchesPlayed,1);assert.equal(result.totals.mapsPlayed,0);assert.equal(result.totals.kills+result.totals.deaths+result.totals.assists+result.totals.mvpCount,0);
+  assert.equal(result.players.size,0);assert.equal(result.maps.size,0);assert.equal(result.teams.get('a').losses,1);assert.equal(result.teams.get('b').wins,1);
+});
 
 test('a confirmed series without details adds no player or map statistics', () => {
   const result = calculateStatistics([{ id:'live-only', data:{status:'completed',team1Id:'a',team2Id:'b',winnerId:'a',score1:2,score2:1,roundDetails:[],playerStats:[]} }]);

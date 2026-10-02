@@ -8,8 +8,8 @@ const parsed = ts.parseConfigFileTextToJson('wrangler.jsonc', readFileSync('wran
 if (parsed.error) throw new Error('Your local wrangler.jsonc is not valid JSONC.');
 const config = parsed.config;
 const staging = config.d1_databases?.find(db => db.binding === 'cflesportsid_staging' && db.database_name === 'cflesportsid-staging');
-if (!staging?.database_id || staging.database_id === 'local-placeholder') {
-  throw new Error('Configure cflesportsid_staging for cflesportsid-staging in your local wrangler.jsonc first.');
+if (staging?.database_id !== '4ba57de7-5fda-4703-a956-b1936546986a') {
+  throw new Error('Admin development requires the approved cflesportsid-staging database ID in wrangler.jsonc.');
 }
 const production = config.d1_databases?.find(db => db.binding === 'DB');
 if (production?.database_name === 'cflesportsid' && production.database_id === staging.database_id) {

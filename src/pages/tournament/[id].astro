@@ -189,7 +189,7 @@ function bracketRow(slot: number, roundIndex: number) {
                             )}
                             <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
                           </div>
-                          <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
+                          <span class="bracket-team-score">{m.data.resultType==='walkover'?'W/O':complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
                         </div>
                         <div class={`bracket-team-row ${win2 ? 'winner' : win1 ? 'loser' : ''}`} style={`--team-color:${team2?.data.color || '#777B82'};`}>
                           <div class="bracket-team-info">
@@ -204,7 +204,7 @@ function bracketRow(slot: number, roundIndex: number) {
                             )}
                             <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
                           </div>
-                          <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
+                          <span class="bracket-team-score">{m.data.resultType==='walkover'?'W/O':complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
                         </div>
                       </a>
                     );
@@ -247,7 +247,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 )}
                                 <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
                               </div>
-                              <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
+                              <span class="bracket-team-score">{m.data.resultType==='walkover'?'W/O':complete || m.data.status === 'live' ? m.data.score1 : '–'}</span>
                             </div>
 
                             <div class={`bracket-team-row ${win2 ? 'winner' : win1 ? 'loser' : ''}`} style={`--team-color:${team2?.data.color || '#777B82'};`}>
@@ -263,7 +263,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 )}
                                 <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
                               </div>
-                              <span class="bracket-team-score">{complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
+                              <span class="bracket-team-score">{m.data.resultType==='walkover'?'W/O':complete || m.data.status === 'live' ? m.data.score2 : '–'}</span>
                             </div>
                           </a>
                         );

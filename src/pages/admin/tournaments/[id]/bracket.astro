@@ -2,6 +2,7 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import MatchDetailActions from '../../../../components/admin/MatchDetailActions.astro';
 import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
 import { readBracketState, readBracketForm, officialDraw, confirmOfficialBracket } from '../../../../admin/bracket.mjs';
 import { readLiveResults, saveLiveResult, seriesWinner } from '../../../../admin/live-results.mjs';
@@ -15,7 +16,7 @@ try {
   if (state && Astro.request.method === 'POST') {
     const form = await readBracketForm(Astro.request);
     drawCount = form.draw_count ?? '1';
-    if (form.intent === 'save-score' || form.intent === 'confirm-result') {
+    if (form.intent === 'save-score' || form.intent === 'confirm-result' || form.intent === 'confirm-walkover') {
       await saveLiveResult(db, state.tournament.id, form);
       return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
     } else if (form.intent === 'draw') preview = await officialDraw(state, form, secret);
@@ -54,9 +55,9 @@ const enough = state && state.stage && state.participants.length >= Math.max(2, 
                 return source ? `${source[2] === 'loser' ? 'Loser' : 'Winner'} of ${parent ? `${parent.round_name} · Match ${parent.bracket_slot}` : source[4]}` : 'TBD';
               };
               return <li data-live-match={m.id}>
-                <strong>Match {m.bracket_slot} · {m.status === 'completed' ? 'Result confirmed' : m.status}</strong>
-                <span>{m.map_count} fixed maps · {m.detail_maps || m.detail_rounds ? 'Details entered' : 'Details not entered'}</span>
-                {locked || !resolved ? <><span>{teamName(m.team1_id ?? undefined) ?? sourceLabel(1)} · {m.score1}</span><span>{teamName(m.team2_id ?? undefined) ?? sourceLabel(2)} · {m.score2}</span>{m.winner_id && <span>Winner: {teamName(m.winner_id)}</span>}{!resolved && <span>Waiting for feeder results</span>}</> : <>
+                <strong>Match {m.bracket_slot} · {m.result_type==='walkover'?'W/O':m.status === 'completed' ? 'Result confirmed' : m.status}</strong>
+                <span>{m.map_count} fixed maps</span>
+                {locked || !resolved ? <><span>{teamName(m.team1_id ?? undefined) ?? sourceLabel(1)} · {m.result_type==='walkover'?'W/O':m.score1}</span><span>{teamName(m.team2_id ?? undefined) ?? sourceLabel(2)} · {m.result_type==='walkover'?'W/O':m.score2}</span>{m.winner_id && <span>Winner: {teamName(m.winner_id)}</span>}{!resolved && <span>Waiting for feeder results</span>}</> : <>
                   <form method="POST" class="live-score-form" data-live-form>
                     <input type="hidden" name="intent" value="save-score" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
                     <label for={`${m.id}-score1`}><span>{teamName(m.team1_id ?? undefined)}</span><input id={`${m.id}-score1`} name="score1" type="number" min="0" max={m.map_count} step="1" value={m.score1} required inputmode="numeric" /></label>
@@ -68,8 +69,15 @@ const enough = state && state.stage && state.participants.length >= Math.max(2, 
                     <p>Saved result: {m.score1}–{m.score2} · Winner: {teamName(winnerSide === 1 ? m.team1_id! : m.team2_id!)}</p>
                     <button class="admin-button" type="submit">Confirm Result</button><p class="admin-submit-status" role="status"></p>
                   </form> : <span>Save a winning score before confirming.</span>}
+                  <form method="POST" data-live-form>
+                    <input type="hidden" name="intent" value="confirm-walkover" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
+                    <label for={`${m.id}-wo`}>Full-match W/O winner</label>
+                    <select id={`${m.id}-wo`} name="walkover_winner" required><option value="">Select winner</option>{[m.team1_id,m.team2_id].map(team=><option value={team!}>{teamName(team!)}</option>)}</select>
+                    <p>No maps were played. Confirms the winner and advances the bracket.</p>
+                    <button class="admin-outline" type="submit">Confirm Full-match W/O</button><p class="admin-submit-status" role="status"></p>
+                  </form>
                 </>}
-                <a href={`/matches/${m.id}`}>View public match</a>
+                <MatchDetailActions tournamentId={state!.tournament.id} match={m} />
               </li>;
             })}
           </ol>

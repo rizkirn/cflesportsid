@@ -2,6 +2,7 @@
 export const prerender = false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import MatchDetailActions from '../../../../components/admin/MatchDetailActions.astro';
 import { requireLocalAdmin, getTournament } from '../../../../admin/tournaments.mjs';
 import { readParticipantState } from '../../../../admin/participants.mjs';
 const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
@@ -14,7 +15,11 @@ try {
     const result = await db.batch([db.prepare(`SELECT m.*,r.name AS round_name,t1.name AS team1_name,t2.name AS team2_name,
       s1.source_type AS source1_type,s1.source_match_id AS source1_match,s1.source_bye_id AS source1_bye,
       s2.source_type AS source2_type,s2.source_match_id AS source2_match,s2.source_bye_id AS source2_bye,
-      sr1.name AS source1_round,p1.bracket_slot AS source1_slot,sr2.name AS source2_round,p2.bracket_slot AS source2_slot
+      sr1.name AS source1_round,p1.bracket_slot AS source1_slot,sr2.name AS source2_round,p2.bracket_slot AS source2_slot,
+      (SELECT status FROM match_detail_edits WHERE match_id=m.id) AS detail_status,
+      (SELECT count(*) FROM match_maps WHERE match_id=m.id)+(SELECT count(*) FROM match_map_walkovers WHERE match_id=m.id) AS detail_maps,
+      (SELECT count(*) FROM player_match_entries WHERE match_id=m.id) AS detail_entries,
+      (SELECT count(*) FROM player_round_stats WHERE match_id=m.id) AS detail_rounds
       FROM matches m JOIN tournament_rounds r ON r.tournament_id=m.tournament_id AND r.stage_id=m.stage_id AND r.id=m.round_id
       LEFT JOIN teams t1 ON t1.id=m.team1_id LEFT JOIN teams t2 ON t2.id=m.team2_id
       LEFT JOIN match_sources s1 ON s1.match_id=m.id AND s1.side=1 LEFT JOIN match_sources s2 ON s2.match_id=m.id AND s2.side=2
@@ -31,6 +36,6 @@ const label = (match,side) => match[`team${side}_name`] ?? (match[`source${side}
 <AdminLayout title="Matches" workspace={workspace}>
   {failed ? <p class="admin-error" role="alert">Could not load matches. Check staging and reload.</p> : !tournament ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
     <header class="admin-heading"><div><h1>{tournament.name}</h1><p>Matches</p></div><a href={`/admin/tournaments/${tournament.id}/bracket`}>Open Bracket</a></header>
-    {matches.length ? <><p class="admin-help">Official bracket saved. Setup, Participants and Roster are locked. Update live scores and confirm results in Bracket. Scheduling and detailed stats entry are later work.</p><ul class="admin-list">{matches.map(match=><li><div><h2>{match.round_name} · Slot {match.bracket_slot}</h2><p>{label(match,1)} vs {label(match,2)}</p></div><div class="admin-row-end"><span>{match.score1}–{match.score2} · {match.status}</span><span>{match.date}</span></div></li>)}</ul></> : <section class="admin-empty"><h2>No matches yet</h2><p>Confirm the final draw in Bracket Setup to create matches.</p></section>}
+    {matches.length ? <><p class="admin-help">Official bracket saved. Confirm series results in Bracket, then enter all three screenshots in Match Details.</p><ul class="admin-list admin-match-list">{matches.map(match=><li><div><h2>{match.round_name} · Slot {match.bracket_slot}</h2><p>{label(match,1)} vs {label(match,2)}</p></div><div class="admin-row-end"><span>{match.score1}–{match.score2} · {match.status === 'completed' ? 'Result confirmed' : match.status}</span><span>{match.date}</span><MatchDetailActions tournamentId={tournament.id} match={match} /></div></li>)}</ul></> : <section class="admin-empty"><h2>No matches yet</h2><p>Confirm the final draw in Bracket Setup to create matches.</p></section>}
   </>}
 </AdminLayout>

@@ -152,7 +152,7 @@ const sortedMatches = [...teamMatches].sort((a, b) => {
                         <a href={`/teams/${opponent.id}`} class="opponent-link">{opponent.data.name}</a>
                       ) : (opponentId ?? 'TBD')}
                     </td>
-                    <td><a href={`/matches/${m.id}`} class="score-link">{myScore} - {oppScore}</a></td>
+                    <td><a href={`/matches/${m.id}`} class="score-link">{m.data.resultType==='walkover'?'W/O':`${myScore} - ${oppScore}`}</a></td>
                     <td><span class={`badge ${resultBadge}`}>{resultText}</span></td>
                   </tr>
                 );

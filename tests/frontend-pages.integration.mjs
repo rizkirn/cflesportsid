@@ -93,7 +93,7 @@ try {
   writeFileSync(referenceConfig, JSON.stringify({ ...referenceBuilt, main: resolve(referenceRoot, 'dist/server', referenceBuilt.main), assets: { ...referenceBuilt.assets, directory: resolve(referenceRoot, 'dist/client') }, d1_databases: [] }));
   const reference = await start(referenceConfig, join(scratch, 'reference-store'), 44323);
   for (const server of [d1, fallback]) {
-    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket', '/admin/tournaments/test-cup/matches','/admin/tournaments/test-cup/roster']) {
+    for (const path of ['/admin', '/admin/tournaments/new', '/admin/tournaments/test-cup/setup', '/admin/tournaments/test-cup/participants', '/admin/tournaments/test-cup/bracket', '/admin/tournaments/test-cup/matches','/admin/tournaments/test-cup/matches/test-match','/admin/tournaments/test-cup/roster']) {
       for (const method of ['GET', 'POST']) {
         const denied = await fetch(server.url + path, { method, redirect: 'manual', ...(method === 'POST' ? { headers: { origin: server.url, 'content-type': 'application/x-www-form-urlencoded' }, body: 'revision=test' } : {}) });
         assert.equal(denied.status, 403, `Built admin must be closed: ${method} ${path}`);

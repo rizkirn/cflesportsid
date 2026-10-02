@@ -1,6 +1,8 @@
 export const matchReadQueries = [
   'SELECT * FROM matches ORDER BY id',
-  'SELECT * FROM match_maps ORDER BY match_id, map_number',
+  `SELECT *, 'played' AS mode FROM match_maps UNION ALL
+   SELECT match_id,map_number,map_id,winner_team_id,NULL,NULL,NULL,NULL,'walkover' AS mode
+   FROM match_map_walkovers ORDER BY match_id,map_number`,
   'SELECT * FROM match_sources ORDER BY match_id, side',
   'SELECT * FROM player_match_entries ORDER BY match_id, entry_index',
   'SELECT * FROM player_round_stats ORDER BY match_id, entry_index, round_index',
@@ -58,6 +60,7 @@ export function shapeD1Matches(rows, legacyMatches) {
     const data = baseline ? structuredClone(baseline.data) : { roundDetails: [], playerStats: [] };
     Object.assign(data, { tournamentId: m.tournament_id, stageId: m.stage_id, roundId: m.round_id,
       bracketSlot: m.bracket_slot, date: m.date, status: m.status, score1: m.score1, score2: m.score2 });
+    if(m.result_type==='walkover')data.resultType='walkover';
     for (const [field, column] of [['team1Id', 'team1_id'], ['team2Id', 'team2_id'], ['winnerId', 'winner_id'], ['duration', 'duration']]) optional(data, field, m[column]);
     delete data.team1Source; delete data.team2Source;
     for (const s of sourceRows.get(m.id) ?? []) {
@@ -68,10 +71,16 @@ export function shapeD1Matches(rows, legacyMatches) {
     }
     data.roundDetails = (mapRows.get(m.id) ?? []).map(r => {
       const result = { round_number: r.map_number, mapId: r.map_id };
+      if(r.mode==='walkover')return {round_number:r.map_number,...(r.map_id?{mapId:r.map_id}:{}),mode:'walkover',winnerId:r.winner_team_id};
       optional(result, 'winnerId', r.winner_team_id);
       optional(result, 'resultNote', r.result_note);
+      optional(result, 'score1', r.score_team1);
+      optional(result, 'score2', r.score_team2);
       const old = baseline?.data.roundDetails.find(old => old.round_number === r.map_number);
-      if (r.mvp_player_id !== null) result.mvp = r.mvp_player_id;
+      if (r.mvp_player_id !== null) {
+        const entry=(entryRows.get(m.id) ?? []).find(e=>e.player_id===r.mvp_player_id);
+        result.mvp = baseline ? r.mvp_player_id : entry?.uid_snapshot ?? r.mvp_player_id;
+      }
       else if (old?.mvp === null) result.mvp = null;
       return result;
     });
@@ -84,6 +93,10 @@ export function shapeD1Matches(rows, legacyMatches) {
       if (e.uid_snapshot !== null) result.uid = e.uid_snapshot;
       else if (old && 'uid' in old) result.uid = null;
       optional(result, 'ign', e.ign_snapshot);
+      if (!baseline) {
+        result.playerId=e.player_id;
+        result.uid=e.uid_snapshot ?? e.player_id;
+      }
       return result;
     });
     return [m.id, { ...(baseline ?? { id: m.id, collection: 'matches' }), data }];

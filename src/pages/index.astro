@@ -765,7 +765,7 @@ const qualificationPercent = Math.min(
                         'winning-score'
                     ]}
                   >
-                    {match.data.score1}
+                    {match.data.resultType==='walkover'?'W/O':match.data.score1}
                   </strong>
                 </div>
 
@@ -794,7 +794,7 @@ const qualificationPercent = Math.min(
                         'winning-score'
                     ]}
                   >
-                    {match.data.score2}
+                    {match.data.resultType==='walkover'?'W/O':match.data.score2}
                   </strong>
                 </div>
               </a>

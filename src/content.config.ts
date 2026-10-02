@@ -132,11 +132,15 @@ const matches = defineCollection({
     score1: z.number().int().nonnegative().default(0),
     score2: z.number().int().nonnegative().default(0),
     winnerId: z.string().min(1).optional(),
+    resultType: z.enum(['played','walkover']).optional(),
     status: z.enum(['upcoming', 'live', 'completed']).default('upcoming'),
     bracketSlot: z.number().int().positive(),
     roundDetails: z.array(z.object({
       round_number: z.number(),
-      mapId: z.string().min(1),
+      mapId: z.string().min(1).optional(),
+      mode: z.enum(['played','walkover']).optional(),
+      score1: z.number().int().nonnegative().optional(),
+      score2: z.number().int().nonnegative().optional(),
       winnerId: z.string().min(1).optional(),
       resultNote: z.string().min(1).optional(),
       mvp: z.string().nullable().optional(),
@@ -154,6 +158,7 @@ const matches = defineCollection({
       assists: z.number().int().nonnegative().default(0),
     }).default({ kills: 0, deaths: 0, assists: 0 }),
     playerStats: z.array(z.object({
+      playerId: z.string().nullable().optional(),
       teamId: z.string().min(1).nullable(),
       uid: z.string().nullable().optional(),
       ign: z.string().optional(),
@@ -167,6 +172,9 @@ const matches = defineCollection({
   }).superRefine((match, ctx) => {
     const knownMapWins = { team1: 0, team2: 0 };
     match.roundDetails.forEach((round, index) => {
+      if(round.mode==='walkover') {
+        if(!round.winnerId||round.score1!==undefined||round.score2!==undefined||round.mvp!=null)ctx.addIssue({code:z.ZodIssueCode.custom,path:['roundDetails',index],message:'W/O needs a winner and no round score or MVP.'});
+      } else if(!round.mapId)ctx.addIssue({code:z.ZodIssueCode.custom,path:['roundDetails',index,'mapId'],message:'Played map needs a map.'});
       if (!round.winnerId) return;
       if (round.winnerId === match.team1Id) knownMapWins.team1++;
       else if (round.winnerId === match.team2Id) knownMapWins.team2++;
@@ -176,6 +184,7 @@ const matches = defineCollection({
       ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['roundDetails'], message: 'Recorded map winners disagree with the match score.' });
     }
     const uids = new Set<string>();
+    if(match.resultType==='walkover'&&(match.status!=='completed'||![match.team1Id,match.team2Id].includes(match.winnerId)||!match.winnerId||match.score1!==0||match.score2!==0||match.roundDetails.length||match.playerStats.length))ctx.addIssue({code:z.ZodIssueCode.custom,path:['resultType'],message:'Full-match W/O needs a winner and no map/player details.'});
     match.playerStats.forEach((playerStats, index) => {
       if (playerStats.uid && uids.has(playerStats.uid)) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['playerStats', index, 'uid'], message: 'Duplicate player in match.' });
@@ -184,6 +193,7 @@ const matches = defineCollection({
       const roundNumbers = new Set<number>();
       playerStats.rounds.forEach((round, roundIndex) => {
         if (round.round_number === undefined) return;
+        if(match.roundDetails.some(rd=>rd.round_number===round.round_number&&rd.mode==='walkover'))ctx.addIssue({code:z.ZodIssueCode.custom,path:['playerStats',index,'rounds',roundIndex],message:'W/O cannot contain player stats.'});
         if (roundNumbers.has(round.round_number) || !match.roundDetails.some(rd => rd.round_number === round.round_number)) {
           ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['playerStats', index, 'rounds', roundIndex, 'round_number'], message: 'Map number must exist in roundDetails and cannot repeat for a player.' });
         }

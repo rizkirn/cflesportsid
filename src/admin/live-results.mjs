@@ -5,11 +5,11 @@ const snapshotSQL = `json_object(
   'tournament',json((SELECT json_array(status,winner_team_id) FROM tournaments WHERE id=?1)),
   'stages',json((SELECT json_group_array(json_array(id,series_type,map_count)) FROM (SELECT * FROM tournament_stages WHERE tournament_id=?1 ORDER BY id))),
   'rounds',json((SELECT json_group_array(json_array(stage_id,id,sort_order,placement)) FROM (SELECT * FROM tournament_rounds WHERE tournament_id=?1 ORDER BY stage_id,sort_order))),
-  'matches',json((SELECT json_group_array(json_array(id,stage_id,round_id,bracket_slot,status,team1_id,team2_id,score1,score2,winner_id)) FROM (SELECT * FROM matches WHERE tournament_id=?1 ORDER BY id))),
+  'matches',json((SELECT json_group_array(json_array(id,stage_id,round_id,bracket_slot,status,team1_id,team2_id,score1,score2,winner_id,result_type)) FROM (SELECT * FROM matches WHERE tournament_id=?1 ORDER BY id))),
   'sources',json((SELECT json_group_array(json_array(s.match_id,s.side,s.source_type,s.source_match_id,s.source_bye_id)) FROM (SELECT match_sources.* FROM match_sources JOIN matches ON matches.id=match_sources.match_id WHERE matches.tournament_id=?1 ORDER BY match_id,side) s)),
   'byes',json((SELECT json_group_array(json_array(stage_id,id,team_id,round_id,slot)) FROM (SELECT * FROM tournament_byes WHERE tournament_id=?1 ORDER BY stage_id,id))),
   'details',json((SELECT json_group_array(json_array(m.id,
-    (SELECT count(*) FROM match_maps WHERE match_id=m.id),
+    (SELECT count(*) FROM match_maps WHERE match_id=m.id)+(SELECT count(*) FROM match_map_walkovers WHERE match_id=m.id),
     (SELECT count(*) FROM player_match_entries WHERE match_id=m.id),
     (SELECT count(*) FROM player_round_stats WHERE match_id=m.id))) FROM (SELECT id FROM matches WHERE tournament_id=?1 ORDER BY id) m)))`;
 
@@ -17,8 +17,10 @@ export async function readLiveResults(db, id) {
   const results = await db.batch([
     db.prepare(`SELECT ${snapshotSQL} AS snapshot`).bind(id),
     db.prepare(`SELECT m.*, r.name AS round_name, r.sort_order, s.series_type, s.map_count,
-      (SELECT count(*) FROM match_maps WHERE match_id=m.id) AS detail_maps,
-      (SELECT count(*) FROM player_round_stats WHERE match_id=m.id) AS detail_rounds
+      (SELECT count(*) FROM match_maps WHERE match_id=m.id)+(SELECT count(*) FROM match_map_walkovers WHERE match_id=m.id) AS detail_maps,
+      (SELECT count(*) FROM player_match_entries WHERE match_id=m.id) AS detail_entries,
+      (SELECT count(*) FROM player_round_stats WHERE match_id=m.id) AS detail_rounds,
+      (SELECT status FROM match_detail_edits WHERE match_id=m.id) AS detail_status
       FROM matches m JOIN tournament_stages s ON s.tournament_id=m.tournament_id AND s.id=m.stage_id
       JOIN tournament_rounds r ON r.tournament_id=m.tournament_id AND r.stage_id=m.stage_id AND r.id=m.round_id
       WHERE m.tournament_id=? ORDER BY r.sort_order,m.bracket_slot,m.id`).bind(id),
@@ -40,7 +42,7 @@ export async function saveLiveResult(db, id, form) {
   const state = await readLiveResults(db, id);
   if (state.historical) throw new AdminError('Historical S1/S2 results are read-only.', 409);
   if (form.result_revision !== state.revision) throw new AdminError('The bracket changed. Reload before saving the score.', 409);
-  if (!['save-score', 'confirm-result'].includes(form.intent)) throw new AdminError('Unknown result action.');
+  if (!['save-score', 'confirm-result','confirm-walkover'].includes(form.intent)) throw new AdminError('Unknown result action.');
   const match = state.matches.find(m => m.id === form.match_id);
   if (!match) throw new AdminError('Match not found.', 404);
   if (match.status === 'completed' || match.winner_id) throw new AdminError('Result confirmed. Corrections require a separate admin action.', 409);
@@ -66,8 +68,14 @@ export async function saveLiveResult(db, id, form) {
     score1 = Number(form.score1); score2 = Number(form.score2);
     if (![score1, score2].every(Number.isSafeInteger) || score1 + score2 > match.map_count) throw new AdminError(`Series scores cannot total more than ${match.map_count} maps.`);
   }
-  const confirmed = form.intent === 'confirm-result';
-  const side = seriesWinner(score1, score2, match.series_type, match.map_count);
+  const walkover=form.intent==='confirm-walkover';
+  if(walkover) {
+    if(![match.team1_id,match.team2_id].includes(form.walkover_winner))throw new AdminError('Select the W/O winner.');
+    if(match.detail_maps||match.detail_entries||match.detail_rounds||match.detail_status)throw new AdminError('Existing details prevent a full-match W/O.',409);
+    score1=0;score2=0;
+  }
+  const confirmed = form.intent === 'confirm-result'||walkover;
+  const side = walkover?(form.walkover_winner===match.team1_id?1:2):seriesWinner(score1, score2, match.series_type, match.map_count);
   if (confirmed && !side) throw new AdminError(`A confirmed result needs a non-tied score totaling ${match.map_count} maps.`);
   const winner = confirmed ? match[`team${side}_id`] : null;
   const loser = confirmed ? match[`team${side === 1 ? 2 : 1}_id`] : null;
@@ -89,9 +97,11 @@ export async function saveLiveResult(db, id, form) {
   }
   // A stale snapshot violates NOT NULL and rolls back the score and every advancement together.
   const statements = [db.prepare(`UPDATE tournaments SET name=CASE WHEN (${snapshotSQL})=?2 THEN name ELSE NULL END WHERE id=?1`).bind(id, state.snapshot),
-    db.prepare('UPDATE matches SET score1=?,score2=?,status=?,winner_id=? WHERE id=? AND tournament_id=?').bind(score1, score2, confirmed ? 'completed' : 'live', winner, match.id, id),
+    db.prepare('UPDATE matches SET score1=?,score2=?,status=?,winner_id=?,result_type=? WHERE id=? AND tournament_id=?').bind(score1, score2, confirmed ? 'completed' : 'live', winner,walkover?'walkover':'played', match.id, id),
     ...advances.map(([target, targetSide, type]) => db.prepare(`UPDATE matches SET team${targetSide}_id=? WHERE id=? AND tournament_id=?`).bind(type === 'winner' ? winner : loser, target, id)),
   ];
+  if(walkover)statements.splice(1,0,db.prepare(`UPDATE tournaments SET name=CASE WHEN
+    EXISTS(SELECT 1 FROM match_detail_edits WHERE match_id=?2) THEN NULL ELSE name END WHERE id=?1`).bind(id,match.id));
   try {
     const results = await db.batch(statements);
     if (results.some(r => !r.success)) throw new Error('Live result save failed');

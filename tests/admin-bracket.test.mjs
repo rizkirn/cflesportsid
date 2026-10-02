@@ -10,7 +10,7 @@ import { readLiveResults, saveLiveResult, seriesWinner } from '../src/admin/live
 import { readD1Matches } from '../src/data-access/matches.mjs';
 const secret='a'.repeat(64);
 async function fixture(count=13) {
-  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0002_preserve_player_rounds.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8'));
+  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0002_preserve_player_rounds.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8')); sqlite.exec(readFileSync('migrations/0004_match_detail_edits.sql','utf8'));sqlite.exec(readFileSync('migrations/0005_walkovers.sql','utf8'));
   sqlite.exec("INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('test-cup','Test Cup','2026-10-01','2026-10-02','upcoming','single-elimination')");
   const db={hook:null,prepare(sql){let values=[];return {bind(...args){values=args;return this;},async all(){const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {success:true,results:sqlite.prepare(sql).all(...args)};}};},async batch(statements){if(statements.length>3&&this.hook){const hook=this.hook;this.hook=null;hook();}sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
   await saveSetup(db,'test-cup',setupForm(await readSetup(db,'test-cup')));
@@ -60,6 +60,34 @@ async function result(db,mid,intent='save-score',score1='2',score2='1') {
 function noDetails(sqlite) {
   for(const table of ['match_maps','player_match_entries','player_round_stats','player_map_stats']) assert.equal(sqlite.prepare(`SELECT count(*) n FROM ${table}`).get().n,0,table);
 }
+test('full-match W/O advances an explicit winner without maps or player records',async()=>{
+  const {sqlite,db}=await liveFixture();try {
+    let state=await readLiveResults(db,'test-cup');const m=state.matches.find(m=>m.team1_id&&m.team2_id);
+    const form={intent:'confirm-walkover',match_id:m.id,result_revision:state.revision,walkover_winner:m.team2_id};
+    await assert.rejects(saveLiveResult(db,'test-cup',{...form,walkover_winner:'outside'}),/W\/O winner/);
+    await saveLiveResult(db,'test-cup',form);
+    state=await readLiveResults(db,'test-cup');const saved=state.matches.find(row=>row.id===m.id);
+    assert.equal(saved.result_type,'walkover');assert.equal(saved.status,'completed');assert.equal(saved.winner_id,m.team2_id);assert.equal(saved.score1+saved.score2,0);
+    for(const [target,side,type,parent]of JSON.parse(state.snapshot).sources.filter(s=>s[3]===m.id))assert.equal(state.matches.find(row=>row.id===target)[`team${side}_id`],type==='winner'?m.team2_id:m.team1_id);
+    noDetails(sqlite);assert.equal(sqlite.prepare('SELECT count(*) n FROM match_map_walkovers').get().n,0);
+    const publicMatch=(await readD1Matches(db,[])).find(row=>row.id===m.id);assert.equal(publicMatch.data.resultType,'walkover');assert.equal(publicMatch.data.roundDetails.length,0);
+    await assert.rejects(saveLiveResult(db,'test-cup',{...form,result_revision:state.revision}),e=>e.status===409);
+  }finally{sqlite.close();}
+});
+test('full-match W/O refuses started downstream state and concurrent detail drafts',async()=>{
+  for(const mode of ['downstream','draft-race']) {
+    const {sqlite,db}=await liveFixture();try {
+      let state=await readLiveResults(db,'test-cup');const m=state.matches.find(m=>m.team1_id&&m.team2_id);
+      if(mode==='downstream') {
+        const target=JSON.parse(state.snapshot).sources.find(s=>s[3]===m.id)[0];
+        sqlite.prepare("UPDATE matches SET status='live' WHERE id=?").run(target);
+        state=await readLiveResults(db,'test-cup');
+      } else db.hook=()=>sqlite.prepare('INSERT INTO match_detail_edits VALUES(?,?,?,?)').run(m.id,'draft','{"maps":[]}',1);
+      await assert.rejects(saveLiveResult(db,'test-cup',{intent:'confirm-walkover',match_id:m.id,result_revision:state.revision,walkover_winner:m.team1_id}),e=>e.status===409);
+      assert.equal(sqlite.prepare('SELECT winner_id FROM matches WHERE id=?').get(m.id).winner_id,null);noDetails(sqlite);
+    }finally{sqlite.close();}
+  }
+});
 test('live score persists/reloads through the public D1 reader without children or progression',async()=>{
   const {sqlite,db}=await liveFixture();try{
     const m=(await readLiveResults(db,'test-cup')).matches.find(m=>m.team1_id&&m.team2_id);

@@ -128,6 +128,10 @@ export function validateTournament(tournament: Tournament, allMatches: Match[], 
       }
       if (m.status === 'completed') {
         if (!m.team1Id || !m.team2Id || !m.winnerId) fail(`${match.id}: completed match needs teams and winner`);
+        if(m.resultType==='walkover') {
+          if(![m.team1Id,m.team2Id].includes(m.winnerId)||m.score1!==0||m.score2!==0||m.roundDetails.length||m.playerStats.length)fail(`${match.id}: invalid full-match W/O`);
+          continue;
+        }
         if (m.score1 + m.score2 !== stage.series.mapCount || m.score1 === m.score2) fail(`${match.id}: completed scores must total ${stage.series.mapCount} maps`);
         if (m.winnerId !== (m.score1 > m.score2 ? m.team1Id : m.team2Id)) fail(`${match.id}: winner disagrees with score`);
         const numbers = new Set(m.roundDetails.map(r => r.round_number));

@@ -97,7 +97,7 @@ const mapMatches = matches
     m =>
       m.data.status === 'completed' &&
       m.data.roundDetails.some(
-        rd => rd.mapId === map.id
+        rd => rd.mapId === map.id && rd.mode!=='walkover'
       )
   )
   .sort(
@@ -571,7 +571,7 @@ const mapMatches = matches
                     <td>
                       {m.data.roundDetails
                         .filter(
-                          rd => rd.mapId === map.id
+                          rd => rd.mapId === map.id && rd.mode!=='walkover'
                         )
                         .map(rd => rd.round_number)
                         .join(', ')}

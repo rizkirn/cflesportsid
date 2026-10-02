@@ -31,6 +31,10 @@
 .admin-defaults dt { color: var(--text-secondary); font-size: .9rem; }
 .admin-defaults dd { overflow-wrap: anywhere; }
 .admin-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 1.5rem; }
+.match-detail-actions { gap: .5rem 1rem; min-width: 0; }
+.match-detail-actions .admin-button { max-width: 100%; white-space: normal; text-align: center; }
+.admin-match-list li { flex-wrap: wrap; }
+.admin-match-list .admin-row-end { min-width: min(100%, 16rem); align-items: flex-start; }
 @media (max-width: 540px) { .admin-page { padding-block: 1.25rem 2rem; } .admin-dates, .admin-defaults { grid-template-columns: 1fr; } .admin-list li { align-items: flex-start; flex-direction: column; } .admin-row-end { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 1rem; } }
 .setup-form { max-width: 960px; }
 .setup-template { margin-bottom: 2rem; }
@@ -118,6 +122,60 @@
 .draw-history a[aria-current="true"] { border-color: var(--accent); color: var(--text-primary); }
 .draw-history a { padding-inline: .7rem; border: 1px solid var(--border); }
 .admin-page button[aria-disabled="true"] { opacity: .7; cursor: wait; }
+.detail-editor { max-width: none; padding-bottom: 2rem; }
+.detail-summary { margin-block: 1rem 1.5rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.detail-section { border: 0; padding: 0; margin: 1rem 0; min-width: 0; }
+.detail-section > legend { font-family: var(--font-heading); font-size: 1.8rem; }
+.detail-map-result, .detail-map-columns { display: grid; grid-template-columns: minmax(6rem,.8fr) minmax(0,2fr) repeat(2,minmax(0,1fr)) minmax(0,1.5fr); align-items: center; gap: .75rem; padding-block: .5rem; border-bottom: 1px solid var(--border); }
+.detail-map-result[data-mode="walkover"] > div:last-child { grid-column: 3 / -1; }
+.detail-map-result p { color: var(--text-secondary); margin: 0; overflow-wrap: anywhere; }
+.detail-map-result h3, .detail-player-map h3 { font-family: var(--font-heading); font-size: 1.5rem; }
+.detail-editor :is(input,select) { border-color: var(--text-secondary); }
+.detail-section:disabled { opacity: 1; }
+.detail-section:disabled :is(input,select) { cursor: not-allowed; }
+.detail-player-map { margin-block: .75rem 1rem; }
+.detail-player-map[hidden] { display: none; }
+.detail-heading nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+.detail-series { font-size: clamp(1.2rem,2vw,1.8rem); color: var(--text-primary); }
+.detail-series strong { margin-inline: .5rem; font-variant-numeric: tabular-nums; }
+.detail-map-result label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.detail-reconcile { display: flex; flex-wrap: wrap; gap: .5rem 2rem; }
+.detail-tabs { display: flex; gap: .5rem; }
+.detail-tabs button { flex: 1; min-width: 0; min-height: 44px; padding: .6rem; text-align: left; background: transparent; color: var(--text-primary); border: 1px solid var(--text-secondary); overflow-wrap: anywhere; }
+.detail-tabs button[aria-selected="true"] { border-bottom: 3px solid var(--accent); }
+.detail-tabs small { display: block; color: var(--text-secondary); }
+.detail-team-tables { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 1.25rem; }
+.detail-kda { table-layout: fixed; width: 100%; min-width: 0; }
+.detail-kda caption { text-align: left; padding-block: .5rem; overflow-wrap: anywhere; }
+.detail-kda input[type="radio"] { accent-color: var(--accent); }
+.detail-kda tr[data-mvp="true"] th { color: var(--accent); }
+.detail-action-bar { position: sticky; bottom: 0; z-index: 5; background: var(--bg-primary); border-top: 1px solid var(--text-secondary); padding: .75rem 0 max(.75rem,env(safe-area-inset-bottom)); flex-wrap: wrap; }
+.detail-action-bar > span { flex: 1 1 16rem; font-size: .85rem; }
+.detail-editor input { scroll-margin-bottom: 10rem; }
+@media(max-width:1100px) { .detail-team-tables { grid-template-columns: minmax(0,1fr); } }
+@media(max-width:760px) { .detail-map-columns { display: none; } .detail-map-result label { position: static; width: auto; height: auto; clip-path: none; } .detail-map-result { gap: .5rem; } .detail-action-bar > span { flex-basis: 100%; } }
+.detail-kda th:first-child { width: 40%; overflow-wrap: anywhere; }
+.detail-kda :is(th,td) { position: static; }
+.detail-kda input { font-variant-numeric: tabular-nums; text-align: center; padding: .5rem; }
+.detail-editor input[aria-invalid="true"] { border-style: dashed; }
+.detail-heading { margin-bottom: 1rem; }
+.detail-heading p { margin-block: .3rem; }
+.detail-editor > .detail-summary { margin-block: .5rem; font-size: .85rem; }
+.detail-player-map > h3 { display: none; }
+.detail-kda :is(th,td) { padding: .35rem; }
+.detail-kda th { font-size: .8rem; }
+.detail-kda input[type="radio"] { padding: 0; min-height: 22px; width: 22px; height: 22px; max-width: 100%; cursor: pointer; }
+.detail-kda .detail-mvp-target { display: flex; align-items: center; justify-content: center; min-height: 44px; margin: 0; cursor: pointer; }
+.detail-action-bar { gap: .5rem; }
+.detail-action-bar .admin-submit-status:empty { display: none; }
+@media(max-width:760px) { .detail-action-bar button { flex: 1; padding-inline: .5rem; } }
+@media(max-width:760px) { .detail-map-result { grid-template-columns: repeat(2,minmax(0,1fr)); } .detail-map-result[data-mode="walkover"] > div:last-child { grid-column: 1 / -1; } .detail-map-result p { grid-column: 1 / -1; } .detail-map-result h3 { font-size: 1.15rem; } }
+@media(max-width:540px) {
+  .detail-kda caption { display: block; width: 100%; }
+  .admin-table.detail-kda tr { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)) 44px; gap: .5rem; }
+  .admin-table.detail-kda th[scope="row"] { grid-column: 1 / -1; width: 100%; padding: .4rem 0; }
+  .detail-kda input { padding: .35rem .15rem; }
+}
 @media(max-width:1000px) { .admin-workspace.has-workspace { grid-template-columns: 160px minmax(0,1fr); gap: 1.25rem; } }
 @media(max-width:760px) { .admin-workspace.has-workspace { display: block; } .tournament-sidebar { position: static; margin-bottom: 2rem; } .tournament-sidebar nav { grid-template-columns: repeat(3,minmax(0,1fr)); } }
 @media(max-width:540px) {

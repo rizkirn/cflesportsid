@@ -47,9 +47,10 @@ export function calculateStatistics(matches: Match[]) {
     for (const id of [m.team1Id, m.team2Id]) {
       if (!id) continue;
       const team = ensure(teams, id, emptyStats);
-      team.matchesPlayed++; team.mapsPlayed += m.roundDetails.length; outcome(team, id, match);
+      team.matchesPlayed++; team.mapsPlayed += m.roundDetails.filter(rd=>rd.mode!=='walkover').length; outcome(team, id, match);
     }
     for (const rd of m.roundDetails) {
+      if(rd.mode==='walkover'||!rd.mapId)continue;
       const map = ensure(maps, rd.mapId, emptyMapStats);
       map.mapsPlayed++; totals.mapsPlayed++; matchMaps.add(rd.mapId);
       const mapWinner = getMapWinner(match, rd);
@@ -69,19 +70,20 @@ export function calculateStatistics(matches: Match[]) {
       }
     }
     for (const id of matchMaps) maps.get(id)!.matchesPlayed++;
-    for (const ps of m.playerStats) {
+    for (const ps of m.resultType==='walkover'?[]:m.playerStats) {
+      const rounds=ps.rounds.filter(r=>!m.roundDetails.some(rd=>rd.round_number===r.round_number&&rd.mode==='walkover'));
       const player = ps.uid ? ensure(players, ps.uid, emptyStats) : undefined;
-      if (player && ps.rounds.length && !matchPlayers.has(ps.uid!)) {
+      if (player && rounds.length && !matchPlayers.has(ps.uid!)) {
         player.matchesPlayed++; outcome(player, ps.teamId, match); matchPlayers.add(ps.uid!);
       }
       const team = ps.teamId ? ensure(teams, ps.teamId, emptyStats) : undefined;
-      for (const r of ps.rounds) {
+      for (const r of rounds) {
         add(totals, r);
         if (player) { add(player, r); player.mapsPlayed++; }
         if (team) add(team, r);
         // An absent map number is unknown, never implicitly map 1 for a substitute.
         const rd = r.round_number === undefined ? undefined : m.roundDetails.find(rd => rd.round_number === r.round_number);
-        if (!rd) { totals.unassignedPlayerRounds++; totals.unassignedMapKills += r.kills; continue; }
+        if (!rd||!rd.mapId) { totals.unassignedPlayerRounds++; totals.unassignedMapKills += r.kills; continue; }
         const map = maps.get(rd.mapId)!;
         add(map, r); map.playerRounds++;
         if (ps.teamId) add(ensure(map.teams, ps.teamId, emptyStats), r);

@@ -162,7 +162,7 @@ const rounds = [...new Set(matches.map(m => getRoundName(m, tournamentsMap)))];
               </div>
 
               <div class="match-score">
-                {completed || m.data.status === 'live' ? (
+                {m.data.resultType==='walkover'?<><strong>W/O</strong><small>Completed</small></>:completed || m.data.status === 'live' ? (
                   <>
                     <div class="score-line">
                       <strong class:list={{ 'score-winner': team1Won }}>{m.data.score1}</strong>
