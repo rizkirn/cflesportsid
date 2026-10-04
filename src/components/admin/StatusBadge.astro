@@ -1,0 +1,5 @@
+---
+interface Props { label:string; tone?:'ready'|'pending'|'info'|'danger'|'neutral'; }
+const {label,tone='neutral'}=Astro.props;
+---
+<span class={`admin-status admin-status--${tone}`}>{label}</span>

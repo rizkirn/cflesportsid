@@ -1,5 +1,7 @@
 import { AdminError, readAdminForm } from './tournaments.mjs';
 import { seriesWinner } from './live-results.mjs';
+import { correctionReason, auditStatement, clearDetailStatements } from './corrections.mjs';
+import {assignmentsAvailable,officialMapsSQL} from './map-assignments.mjs';
 
 const historical = new Set(['clash-for-glory-s1', 'clash-for-glory-s2']);
 const mapPoolSQL = `SELECT maps.id,maps.name FROM maps JOIN matches m ON m.id=?1 JOIN tournaments t ON t.id=m.tournament_id
@@ -7,17 +9,23 @@ const mapPoolSQL = `SELECT maps.id,maps.name FROM maps JOIN matches m ON m.id=?1
     EXISTS(SELECT 1 FROM stage_map_pool p WHERE p.tournament_id=m.tournament_id AND p.stage_id=m.stage_id AND p.map_id=maps.id)
     OR (maps.active=1 AND NOT EXISTS(SELECT 1 FROM stage_map_pool p WHERE p.tournament_id=m.tournament_id AND p.stage_id=m.stage_id)))
   ORDER BY maps.name,maps.id`;
-const snapshotSQL = `json_object(
+const effectivePoolSQL=assignment=>assignment?`SELECT id,name FROM maps WHERE id IN(SELECT id FROM (${mapPoolSQL})) OR id IN(SELECT value FROM json_each(${officialMapsSQL})) ORDER BY name,id`:mapPoolSQL;
+const detailSnapshotSQL = assignment => `json_object(
+  'tournament',json((SELECT json_array(t.status,t.winner_team_id) FROM tournaments t JOIN matches m ON m.tournament_id=t.id WHERE m.id=?1)),
+  'assignments',${assignment?`json(${officialMapsSQL})`:'NULL'},
   'match',json((SELECT json_array(m.tournament_id,m.stage_id,m.status,m.team1_id,m.team2_id,m.score1,m.score2,m.winner_id,s.series_type,s.map_count,m.result_type)
     FROM matches m JOIN tournament_stages s ON s.tournament_id=m.tournament_id AND s.id=m.stage_id WHERE m.id=?1)),
   'roster',json((SELECT json_group_array(json_array(team_id,player_id,ign_snapshot,uid)) FROM
     (SELECT r.*,p.uid FROM tournament_rosters r JOIN players p ON p.id=r.player_id JOIN matches m ON m.tournament_id=r.tournament_id
       WHERE m.id=?1 AND r.team_id IN(m.team1_id,m.team2_id) ORDER BY r.team_id,r.position))),
-  'pool',json((SELECT json_group_array(id) FROM (${mapPoolSQL}))),
+  'pool',json((SELECT json_group_array(id) FROM (${effectivePoolSQL(assignment)}))),
+  'configured_pool',json((SELECT json_group_array(id) FROM (${mapPoolSQL}))),
   'edit',json((SELECT json_array(status,payload,revision) FROM match_detail_edits WHERE match_id=?1)),
   'children',json_array((SELECT count(*) FROM match_maps WHERE match_id=?1),(SELECT count(*) FROM player_match_entries WHERE match_id=?1),(SELECT count(*) FROM player_round_stats WHERE match_id=?1),(SELECT count(*) FROM match_map_walkovers WHERE match_id=?1)))`;
 
-export async function readMatchDetails(db, tournamentId, matchId) {
+export async function readMatchDetails(db, tournamentId, matchId, {correction=false}={}) {
+  const assignmentSchema=await assignmentsAvailable(db);
+  const snapshotSQL=detailSnapshotSQL(assignmentSchema);
   const results = await db.batch([
     db.prepare(`SELECT ${snapshotSQL} AS snapshot`).bind(matchId),
     db.prepare(`SELECT m.*,s.series_type,s.map_count,t1.name AS team1_name,t2.name AS team2_name
@@ -25,7 +33,7 @@ export async function readMatchDetails(db, tournamentId, matchId) {
       LEFT JOIN teams t1 ON t1.id=m.team1_id LEFT JOIN teams t2 ON t2.id=m.team2_id WHERE m.id=? AND m.tournament_id=?`).bind(matchId,tournamentId),
     db.prepare(`SELECT r.*,p.uid FROM tournament_rosters r JOIN players p ON p.id=r.player_id JOIN matches m ON m.tournament_id=r.tournament_id
       WHERE m.id=? AND r.team_id IN(m.team1_id,m.team2_id) ORDER BY r.team_id,r.position`).bind(matchId),
-    db.prepare(mapPoolSQL).bind(matchId),
+    db.prepare(effectivePoolSQL(assignmentSchema)).bind(matchId),
   ]);
   if (results.some(r=>!r.success)) throw new Error('Match details read failed');
   const match=results[1].results[0];
@@ -37,21 +45,24 @@ export async function readMatchDetails(db, tournamentId, matchId) {
   const rows=results[2].results;
   let reason='';
   if (historical.has(tournamentId)) reason='Historical S1/S2 details are read-only.';
+  else if(saved.tournament?.[0]==='completed'&&!(correction&&saved.edit?.[0]==='complete')) reason='Tournament is completed. Use the explicit detail correction flow for completed details.';
   else if (match.result_type==='walkover') reason='Full-match W/O: no Match Details are required.';
-  else if (saved.edit?.[0]==='complete' || saved.children.some(n=>n>0)) reason='Details are complete or already contain imported data. Corrections require a separate workflow.';
+  else if ((saved.edit?.[0]==='complete' && !correction) || (saved.children.some(n=>n>0) && saved.edit?.[0]!=='complete')) reason='Details are complete or already contain imported data. Use Edit Details for completed editor details.';
+  else if(!saved.assignments) reason='Maps not assigned yet';
   else if (match.status!=='completed' || !match.team1_id || !match.team2_id || match.team1_id===match.team2_id
     || match.winner_id!==match[`team${seriesWinner(match.score1,match.score2,match.series_type,match.map_count)}_id`]) reason='Confirm the series result in Bracket before entering details.';
   else if (match.series_type!=='fixed-maps' || match.map_count!==3) reason='This editor supports fixed 3 maps.';
   else if ([match.team1_id,match.team2_id].some(id=>{const n=rows.filter(r=>r.team_id===id).length;return n<5||n>7;})) reason='Each team needs its saved tournament roster of 5–7 players.';
-  return {match,rows,pool:results[3].results,snapshot,revision,reason,status:saved.edit?.[0]??'empty',savedRevision:saved.edit?.[2]??0,
-    payload:saved.edit ? JSON.parse(saved.edit[1]) : emptyDetails(rows)};
+  const payload=saved.edit ? JSON.parse(saved.edit[1]) : emptyDetails(rows);
+  if(saved.assignments)payload.maps.forEach((map,i)=>map.map_id=saved.assignments[i]);
+  return {match,rows,pool:results[3].results,assignments:saved.assignments??[],assignmentSchema,snapshot,revision,reason,correctable:!historical.has(tournamentId)&&saved.edit?.[0]==='complete'&&match.result_type!=='walkover',status:saved.edit?.[0]??'empty',savedRevision:saved.edit?.[2]??0,payload};
 }
 
 export function emptyDetails(rows) {
   return {maps:Array.from({length:3},()=>({mode:'played',winner_side:'',map_id:'',score1:'',score2:'',mvp:'',players:rows.map(r=>({player_id:r.player_id,kills:'',deaths:'',assists:''}))}))};
 }
 export async function readDetailsForm(request) {
-  const fields=await readAdminForm(request,{maxBytes:32768,allowedField:key=>['revision','intent'].includes(key)
+  const fields=await readAdminForm(request,{maxBytes:32768,allowedField:key=>['revision','intent','reason'].includes(key)
     || /^maps\.[0-2]\.(?:mode|winner_side|map_id|score1|score2|mvp)$/.test(key)
     || /^maps\.[0-2]\.players\.(?:[0-9]|1[0-3])\.(?:player_id|kills|deaths|assists)$/.test(key)});
   const maps=Array.from({length:3},(_,i)=>{
@@ -62,7 +73,7 @@ export async function readDetailsForm(request) {
     });
     return {mode:fields[`maps.${i}.mode`]??'played',...Object.fromEntries(['winner_side','map_id','score1','score2','mvp'].map(k=>[k,fields[`maps.${i}.${k}`]??''])),players};
   });
-  return {revision:fields.revision,intent:fields.intent,payload:{maps}};
+  return {revision:fields.revision,intent:fields.intent,reason:fields.reason,payload:{maps}};
 }
 function number(value,label,required) {
   if(value==='') {if(required)throw new AdminError(`${label} is required.`);return null;}
@@ -87,6 +98,7 @@ export function mapResults(payload,pool) {
 export function validateDetails(payload,state,complete) {
   if(!Array.isArray(payload?.maps)||payload.maps.length!==3)throw new AdminError('All 3 maps are required, including Map 3 after a 2–0 start.');
   for(const [i,m] of payload.maps.entries()) {
+    if(state.assignments&&m.map_id!==state.assignments[i])throw new AdminError(`Map ${i+1}: use the confirmed official map.`);
     if(m.mode!==undefined&&!['played','walkover'].includes(m.mode))throw new AdminError(`Map ${i+1}: unknown map mode.`);
     if(m.map_id!==''&&!state.pool.some(p=>p.id===m.map_id))throw new AdminError(`Map ${i+1}: select a map from the tournament pool.`);
     if(m.mode==='walkover') {
@@ -116,19 +128,29 @@ export function validateDetails(payload,state,complete) {
   if(score1!==state.match.score1||score2!==state.match.score2)throw new AdminError(`Detailed series score ${score1}–${score2} differs from confirmed score ${state.match.score1}–${state.match.score2}. Correct the details before completing.`);
 }
 export async function saveMatchDetails(db,tournamentId,matchId,form) {
-  const state=await readMatchDetails(db,tournamentId,matchId);
+  const correcting=form.intent==='correct-details';
+  const state=await readMatchDetails(db,tournamentId,matchId,{correction:correcting});
   if(!state)throw new AdminError('Match not found.',404);
   if(state.reason)throw new AdminError(state.reason,409);
   if(form.revision!==state.revision)throw new AdminError('Match details or roster changed. Reload before saving.',409);
-  if(!['save-draft','complete-details'].includes(form.intent))throw new AdminError('Unknown detail action.');
-  const complete=form.intent==='complete-details';
+  if(!['save-draft','complete-details','correct-details'].includes(form.intent))throw new AdminError('Unknown detail action.');
+  if(correcting&&!state.correctable)throw new AdminError('No completed editor details to correct.',409);
+  const complete=form.intent!=='save-draft';
+  const needsCorrection=correcting||state.payload.correction_required===true;
+  const reason=complete&&needsCorrection?correctionReason(form.reason):null;
   form.payload=normalizeDetails(form.payload,state.rows);
+  if(needsCorrection&&!complete)form.payload.correction_required=true;
   validateDetails(form.payload,state,complete);
-  const statements=[db.prepare(`UPDATE matches SET date=CASE WHEN (${snapshotSQL})=?2 THEN date ELSE NULL END WHERE id=?1`).bind(matchId,state.snapshot),
+  const statements=[db.prepare(`UPDATE matches SET date=CASE WHEN (${detailSnapshotSQL(state.assignmentSchema)})=?2 THEN date ELSE NULL END WHERE id=?1`).bind(matchId,state.snapshot),
     db.prepare(`INSERT INTO match_detail_edits(match_id,status,payload,revision) VALUES(?,?,?,?)
       ON CONFLICT(match_id) DO UPDATE SET status=excluded.status,payload=excluded.payload,revision=excluded.revision`)
       .bind(matchId,complete?'complete':'draft',JSON.stringify(form.payload),state.savedRevision+1)];
   if(complete) {
+    if(needsCorrection) {
+      statements.push(auditStatement(db,tournamentId,matchId,'details',reason,
+        {match:state.match,details:state.payload},{match:state.match,details:form.payload}));
+      statements.push(...clearDetailStatements(db,matchId));
+    }
     const results=mapResults(form.payload,state.pool);
     const participants=state.rows.filter(r=>form.payload.maps.some(m=>m.players.some(p=>p.player_id===r.player_id&&p.kills!=='')));
     form.payload.maps.forEach((m,i)=>statements.push(m.mode==='walkover'

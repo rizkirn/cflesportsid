@@ -10,6 +10,7 @@ interface Props {
   description?: string;
   canonicalPath?: string;
   noindex?: boolean;
+  admin?: boolean;
 }
 
 const { title, current, description = `${title}. Explore Crossfire: Legends Indonesia team standings, player statistics, tournament results and match records.`, canonicalPath = Astro.url.pathname, noindex = false } = Astro.props;
@@ -48,10 +49,10 @@ const shareImage = new URL('/brand/cflesports-id.webp', Astro.site);
 </head>
 <body class:list={[current !== 'Home' && 'interior-page']}>
   <a class="skip-link" href="#main-content">Skip to content</a>
-  <Header current={current} />
+  {!Astro.props.admin && <Header current={current} />}
   <main id="main-content" tabindex="-1">
     <slot />
   </main>
-  <Footer />
+  {!Astro.props.admin && <Footer />}
 </body>
 </html>

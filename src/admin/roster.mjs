@@ -1,4 +1,4 @@
-import { AdminError, readAdminForm } from './tournaments.mjs';
+import { AdminError, readAdminForm, testLifecycleAvailable } from './tournaments.mjs';
 import { readParticipantState, participantSnapshotSQL } from './participants.mjs';
 import { rosterReadiness } from './roster-snapshot.mjs';
 
@@ -10,32 +10,41 @@ function text(value,label,max=120) {
 export async function readRosterState(db,id) {
   const state=await readParticipantState(db,id);
   if(!state) return null;
+  const lifecycle=await testLifecycleAvailable(db);
   const result=await db.batch([
     db.prepare(`SELECT ${participantSnapshotSQL} AS snapshot`).bind(id),
-    db.prepare('SELECT id,name,current_ign,uid,current_team_id FROM players ORDER BY current_ign COLLATE NOCASE,id'),
-    db.prepare(`SELECT r.team_id,r.player_id,r.ign_snapshot FROM tournament_rosters r
-      JOIN players p ON p.id=r.player_id
-      WHERE r.tournament_id=(SELECT t.id FROM tournaments t
-        WHERE t.start_date<(SELECT start_date FROM tournaments WHERE id=?1)
-          AND EXISTS(SELECT 1 FROM tournament_rosters previous WHERE previous.tournament_id=t.id AND previous.team_id=r.team_id)
-        ORDER BY t.start_date DESC,t.end_date DESC,t.id DESC LIMIT 1)
-      ORDER BY r.team_id,r.position`).bind(id),
+    db.prepare(`SELECT p.id,p.name,p.current_ign,p.uid,p.current_team_id,
+      (SELECT r.team_id FROM tournament_rosters r JOIN tournaments t ON t.id=r.tournament_id
+       WHERE r.player_id=p.id AND t.start_date<(SELECT start_date FROM tournaments WHERE id=?1) ${lifecycle?'AND t.is_test=0':''}
+       ORDER BY t.start_date DESC,t.end_date DESC,t.id DESC LIMIT 1) AS latest_team_id
+      FROM players p ORDER BY p.current_ign COLLATE NOCASE,p.id`).bind(id),
+    db.prepare(`SELECT r.tournament_id,r.team_id,r.player_id,r.ign_snapshot,t.start_date,t.end_date FROM tournament_rosters r
+      JOIN players p ON p.id=r.player_id JOIN tournaments t ON t.id=r.tournament_id
+      WHERE t.start_date<(SELECT start_date FROM tournaments WHERE id=?1) ${lifecycle?'AND t.is_test=0':''}
+        AND r.team_id IN(SELECT team_id FROM tournament_teams WHERE tournament_id=?1)
+      ORDER BY r.team_id,t.start_date DESC,t.end_date DESC,t.id DESC,r.position`).bind(id),
   ]);
   if(result.some(r=>!r.success)) throw new Error('Roster read failed');
   if(result[0].results[0].snapshot!==state.snapshot) throw new AdminError('Participants or roster changed while loading. Reload.',409);
   const rows=JSON.parse(state.snapshot).roster;
   const players=result[1].results;
   const readiness=rosterReadiness(state.participants,rows);
-  return {...state,players,rows,previousRows:result[2].results,roster:readiness};
+  const groups=new Map();for(const row of result[2].results){const key=JSON.stringify([row.team_id,row.tournament_id]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);}
+  const chosen=new Set();const previousRows=[];
+  for(const source of groups.values()){
+    if(chosen.has(source[0].team_id)||source.length<1||source.length>7||!source.every(row=>{try{text(row.ign_snapshot,'Tournament IGN');return true;}catch{return false;}}))continue;
+    chosen.add(source[0].team_id);previousRows.push(...source.filter(row=>players.find(player=>player.id===row.player_id)?.latest_team_id===row.team_id));
+  }
+  return {...state,players,rows,previousRows,roster:readiness};
 }
 export function rosterCopySource(state,teamId) {
   if (!state.participants.some(team=>team.id===teamId) || state.rows.some(row=>row[0]===teamId)) return null;
-  const previous=state.previousRows.filter(row=>row.team_id===teamId && !state.rows.some(saved=>saved[1]===row.player_id));
-  if (previous.length && previous.length<=7 && previous.every(row=>{
+  const previous=state.previousRows.filter(row=>row.team_id===teamId);
+  if (previous.length>=1 && previous.length<=7 && previous.every(row=>{
     try { text(row.ign_snapshot,'Tournament IGN'); return true; } catch { return false; }
-  })) return {kind:'previous',entries:previous.map(row=>({team_id:teamId,id:row.player_id,ign:row.ign_snapshot,name:'',uid:''}))};
-  const current=state.players.filter(player=>player.current_team_id===teamId);
-  return current.length ? {kind:'current',entries:current.map(player=>({team_id:teamId,id:player.id,ign:player.current_ign,name:'',uid:''}))} : null;
+  })) return {kind:'previous',entries:previous.filter(row=>!state.rows.some(saved=>saved[1]===row.player_id)).map(row=>({team_id:teamId,id:row.player_id,ign:row.ign_snapshot,name:'',uid:''}))};
+  const current=state.players.filter(player=>player.current_team_id===teamId&&(!player.latest_team_id||player.latest_team_id===teamId)&&!state.rows.some(row=>row[1]===player.id));
+  return current.length>=1&&current.length<=7 ? {kind:'current',entries:current.map(player=>({team_id:teamId,id:player.id,ign:player.current_ign,name:'',uid:''}))} : null;
 }
 export function rosterForm(state,teamId) {
   if(!state.participants.some(team=>team.id===teamId)) throw new AdminError('Select a registered participant team.',404);
@@ -125,18 +134,28 @@ export async function moveRosterPlayer(db,id,form) {
 }
 
 export function workspaceRosterForm(state) {
+  const entries=state.rows.map(([team_id,id,ign])=>({team_id,id,ign,name:'',uid:''}));
+  const teams=[...state.participants].sort((a,b)=>{
+    const left=state.previousRows.find(row=>row.team_id===a.id);const right=state.previousRows.find(row=>row.team_id===b.id);
+    return Number(!!right)-Number(!!left)||(right?.start_date??'').localeCompare(left?.start_date??'')||(right?.end_date??'').localeCompare(left?.end_date??'')||(right?.tournament_id??'').localeCompare(left?.tournament_id??'')||a.id.localeCompare(b.id);
+  });
+  if(state.ready&&!state.locked)for(const team of teams){
+    if(state.rows.some(row=>row[0]===team.id))continue;
+    const source=rosterCopySource(state,team.id);
+    if(source)entries.push(...source.entries.filter(row=>!entries.some(saved=>saved.id===row.id)));
+  }
   return { revision: state.revision, intent: 'save', team_id: state.participants[0]?.id ?? '', player_id: '', new_name: '', new_ign: '', new_uid: '',
-    entries: state.rows.map(([team_id, id, ign]) => ({ team_id, id, ign, name: '', uid: '' })) };
+    entries };
 }
 export async function readWorkspaceRosterForm(request) {
-  const fields = await readAdminForm(request, { maxBytes: 262144, allowedField: key => ['revision','intent','team_id','player_id','new_name','new_ign','new_uid','remove_entry','copy_team'].includes(key)
-    || /^entries\.(?:0|[1-9][0-9]{0,2})\.(?:team_id|id|ign|name|uid)$/.test(key) && Number(key.split('.')[1]) < 224 });
+  const fields = await readAdminForm(request, { maxBytes: 524288, allowedField: key => ['revision','intent','team_id','active_team','player_id','new_name','new_ign','new_uid','remove_entry','copy_team'].includes(key)
+    || /^entries\.(?:0|[1-9][0-9]{0,2})\.(?:team_id|id|ign|name|uid)$/.test(key) && Number(key.split('.')[1]) < 448 });
   const indices = [...new Set(Object.keys(fields).filter(key => key.startsWith('entries.')).map(key => Number(key.split('.')[1])))].sort((a,b) => a-b);
   const entries = indices.map((index,i) => { if (index !== i) throw new AdminError('Roster fields must be consecutive. Reload.'); return Object.fromEntries(['team_id','id','ign','name','uid'].map(key => [key,fields[`entries.${i}.${key}`] ?? ''])); });
   return { ...fields, entries };
 }
 export function validateWorkspaceRoster(form, state) {
-  if (form.entries.length > 224) throw new AdminError('A tournament can register at most 224 players.');
+  if (form.entries.length > 448) throw new AdminError('A tournament can register at most 448 players.');
   const seen = new Set(); const uids = new Set(); const counts = new Map();
   return form.entries.map(row => {
     if (!state.participants.some(team => team.id === row.team_id)) throw new AdminError('Select a registered team for every player.');

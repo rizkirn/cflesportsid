@@ -1,7 +1,8 @@
 import { AdminError } from './tournaments.mjs';
+import { playedMapGuard } from './map-assignments.mjs';
 
 const historical = new Set(['clash-for-glory-s1', 'clash-for-glory-s2']);
-const snapshotSQL = `json_object(
+export const resultSnapshotSQL = `json_object(
   'tournament',json((SELECT json_array(status,winner_team_id) FROM tournaments WHERE id=?1)),
   'stages',json((SELECT json_group_array(json_array(id,series_type,map_count)) FROM (SELECT * FROM tournament_stages WHERE tournament_id=?1 ORDER BY id))),
   'rounds',json((SELECT json_group_array(json_array(stage_id,id,sort_order,placement)) FROM (SELECT * FROM tournament_rounds WHERE tournament_id=?1 ORDER BY stage_id,sort_order))),
@@ -12,6 +13,7 @@ const snapshotSQL = `json_object(
     (SELECT count(*) FROM match_maps WHERE match_id=m.id)+(SELECT count(*) FROM match_map_walkovers WHERE match_id=m.id),
     (SELECT count(*) FROM player_match_entries WHERE match_id=m.id),
     (SELECT count(*) FROM player_round_stats WHERE match_id=m.id))) FROM (SELECT id FROM matches WHERE tournament_id=?1 ORDER BY id) m)))`;
+const snapshotSQL=resultSnapshotSQL;
 
 export async function readLiveResults(db, id) {
   const results = await db.batch([
@@ -42,7 +44,7 @@ export async function saveLiveResult(db, id, form) {
   const state = await readLiveResults(db, id);
   if (state.historical) throw new AdminError('Historical S1/S2 results are read-only.', 409);
   if (form.result_revision !== state.revision) throw new AdminError('The bracket changed. Reload before saving the score.', 409);
-  if (!['save-score', 'confirm-result','confirm-walkover'].includes(form.intent)) throw new AdminError('Unknown result action.');
+  if (!['save-score', 'confirm-result','confirm-walkover','edit-initial-result'].includes(form.intent)) throw new AdminError('Unknown result action.');
   const match = state.matches.find(m => m.id === form.match_id);
   if (!match) throw new AdminError('Match not found.', 404);
   if (match.status === 'completed' || match.winner_id) throw new AdminError('Result confirmed. Corrections require a separate admin action.', 409);
@@ -63,18 +65,19 @@ export async function saveLiveResult(db, id, form) {
     if (!expected || expected !== match[`team${side}_id`]) throw new AdminError('Match teams disagree with their bracket sources.', 409);
   }
   let score1 = match.score1, score2 = match.score2;
-  if (form.intent === 'save-score') {
+  if (form.intent === 'save-score' || form.intent === 'edit-initial-result') {
     if (![form.score1, form.score2].every(n => typeof n === 'string' && /^(0|[1-9]\d*)$/.test(n))) throw new AdminError('Scores must be non-negative whole numbers.');
     score1 = Number(form.score1); score2 = Number(form.score2);
     if (![score1, score2].every(Number.isSafeInteger) || score1 + score2 > match.map_count) throw new AdminError(`Series scores cannot total more than ${match.map_count} maps.`);
   }
   const walkover=form.intent==='confirm-walkover';
+  const mapsGuard=walkover?null:await playedMapGuard(db,id,match);
   if(walkover) {
     if(![match.team1_id,match.team2_id].includes(form.walkover_winner))throw new AdminError('Select the W/O winner.');
     if(match.detail_maps||match.detail_entries||match.detail_rounds||match.detail_status)throw new AdminError('Existing details prevent a full-match W/O.',409);
     score1=0;score2=0;
   }
-  const confirmed = form.intent === 'confirm-result'||walkover;
+  const confirmed = form.intent === 'confirm-result'||form.intent === 'edit-initial-result'||walkover;
   const side = walkover?(form.walkover_winner===match.team1_id?1:2):seriesWinner(score1, score2, match.series_type, match.map_count);
   if (confirmed && !side) throw new AdminError(`A confirmed result needs a non-tied score totaling ${match.map_count} maps.`);
   const winner = confirmed ? match[`team${side}_id`] : null;
@@ -100,6 +103,7 @@ export async function saveLiveResult(db, id, form) {
     db.prepare('UPDATE matches SET score1=?,score2=?,status=?,winner_id=?,result_type=? WHERE id=? AND tournament_id=?').bind(score1, score2, confirmed ? 'completed' : 'live', winner,walkover?'walkover':'played', match.id, id),
     ...advances.map(([target, targetSide, type]) => db.prepare(`UPDATE matches SET team${targetSide}_id=? WHERE id=? AND tournament_id=?`).bind(type === 'winner' ? winner : loser, target, id)),
   ];
+  if(mapsGuard)statements.unshift(mapsGuard);
   if(walkover)statements.splice(1,0,db.prepare(`UPDATE tournaments SET name=CASE WHEN
     EXISTS(SELECT 1 FROM match_detail_edits WHERE match_id=?2) THEN NULL ELSE name END WHERE id=?1`).bind(id,match.id));
   try {

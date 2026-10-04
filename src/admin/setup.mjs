@@ -15,8 +15,8 @@ export const cfgTemplate = {
 };
 const stageFields = ['stage_id', 'stage_name', 'format', 'bracket_size', 'series_type', 'map_count', 'final_map_rule', 'action_seconds', 'reserve_seconds', 'bronze_match'];
 export function eliminationRounds(size, bronze = false) {
-  if (![4, 8, 16, 32].includes(Number(size))) throw new AdminError('Choose a bracket size of 4, 8, 16 or 32.');
-  const names = [[32, 'top-32', 'Top 32'], [16, 'top-16', 'Top 16'], [8, 'quarter-final', 'Quarter Final'], [4, 'semi-final', 'Semi Final']];
+  if (![4, 8, 16, 32, 64].includes(Number(size))) throw new AdminError('Choose a bracket size of 4, 8, 16, 32 or 64.');
+  const names = [[64, 'top-64', 'Top 64'], [32, 'top-32', 'Top 32'], [16, 'top-16', 'Top 16'], [8, 'quarter-final', 'Quarter Final'], [4, 'semi-final', 'Semi Final']];
   const rounds = names.filter(([slots]) => slots <= Number(size)).map(([, id, name]) => ({ id, name, placement: '' }));
   if (bronze) rounds.push({ id: 'bronze', name: 'Bronze Match', placement: '3' });
   rounds.push({ id: 'final', name: 'Final', placement: '1' });
@@ -42,7 +42,7 @@ async function revision(snapshot) {
 export async function readSetup(db, tournamentId) {
   if (!tournamentId || !/^[a-z0-9-]{1,120}$/.test(tournamentId)) return null;
   const results = await db.batch([
-    db.prepare('SELECT id, name, status FROM tournaments WHERE id = ?').bind(tournamentId),
+    db.prepare('SELECT * FROM tournaments WHERE id = ?').bind(tournamentId),
     db.prepare(`SELECT ${snapshotSQL} AS snapshot`).bind(tournamentId),
   ]);
   if (results.some(result => !result.success)) throw new Error('Setup read failed');
@@ -96,8 +96,8 @@ export function validateSetup(input) {
   if (input.format !== 'single-elimination') throw new AdminError('Setup v1 supports single-elimination format.');
   if (input.series_type !== 'fixed-maps') throw new AdminError('Setup v1 supports fixed-maps series.');
   if (input.final_map_rule !== 'random') throw new AdminError('Setup v1 supports random final maps.');
-  const bracket_size = integer(input.bracket_size, 'Bracket size', 4, 32);
-  if (![4, 8, 16, 32].includes(bracket_size)) throw new AdminError('Choose a bracket size of 4, 8, 16 or 32.');
+  const bracket_size = integer(input.bracket_size, 'Bracket size', 4, 64);
+  if (![4, 8, 16, 32, 64].includes(bracket_size)) throw new AdminError('Choose a bracket size of 4, 8, 16, 32 or 64.');
   if (!['', '1', undefined].includes(input.bronze_match)) throw new AdminError('Invalid Bronze Match option.');
   input = { ...input, rounds: eliminationRounds(bracket_size, input.bronze_match === '1') };
   const map_count = integer(input.map_count, 'Maps per match', 1, 15);

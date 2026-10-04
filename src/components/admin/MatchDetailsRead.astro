@@ -1,0 +1,22 @@
+---
+const {db,state}=Astro.props;
+const id=state.match.id;
+const results=await db.batch([
+ db.prepare(`SELECT mm.*,maps.name,'played' AS mode FROM match_maps mm LEFT JOIN maps ON maps.id=mm.map_id WHERE match_id=?1 UNION ALL SELECT wo.match_id,wo.map_number,wo.map_id,wo.winner_team_id,NULL,NULL,NULL,NULL,maps.name,'walkover' FROM match_map_walkovers wo LEFT JOIN maps ON maps.id=wo.map_id WHERE match_id=?1 ORDER BY map_number`).bind(id),
+ db.prepare(`SELECT s.*,p.current_ign FROM player_map_stats s LEFT JOIN players p ON p.id=s.player_id WHERE match_id=? ORDER BY map_number,entry_index,round_index`).bind(id),
+]);
+if(results.some(result=>!result.success))throw new Error('Canonical details unavailable');
+const maps=results[0].results;const stats=results[1].results;
+---
+<div class="detail-tabs" role="tablist" aria-label="Map details">{[1,2,3].map((number,index)=><button type="button" role="tab" data-read-tab={index} aria-selected={String(index===0)} aria-controls={`read-map-${index}`} id={`read-tab-${index}`} tabindex={index===0?0:-1}>Map {number}</button>)}</div>
+{[1,2,3].map((number,index)=>{const map=maps.find(map=>map.map_number===number);const winner=map?.winner_team_id===state.match.team1_id?state.match.team1_name:map?.winner_team_id===state.match.team2_id?state.match.team2_name:'Not recorded';return <section id={`read-map-${index}`} role="tabpanel" aria-labelledby={`read-tab-${index}`} data-read-panel hidden={index!==0}>
+ {!map?<p class="admin-empty">No recorded details for Map {number}.</p>:<>
+ <header class="admin-heading"><h2>{map.name??`Map ${number}`}{map.mode==='walkover'?' · W/O':''}</h2><span>{map.mode==='walkover'?`Winner: ${winner}`:`${map.score_team1==null||map.score_team2==null?'Round score not recorded':`${map.score_team1}-${map.score_team2}`} · Winner: ${winner}`}</span></header>
+ {map.mode!=='walkover'&&<div class="detail-team-tables">{[1,2].map(side=><table class="admin-table detail-kda"><caption>{state.match[`team${side}_name`]}</caption><thead><tr><th>IGN</th><th>K</th><th>D</th><th>A</th><th>MVP</th></tr></thead><tbody>{stats.filter(player=>player.map_number===number&&player.team_id===state.match[`team${side}_id`]).map(player=><tr><th scope="row">{player.ign_snapshot??player.current_ign??'Unassigned'}</th><td>{player.kills}</td><td>{player.deaths}</td><td>{player.assists}</td><td>{player.player_id&&player.player_id===map.mvp_player_id?'Gold ACE':''}</td></tr>)}</tbody></table>)}</div>}
+ </>}
+ </section>;})}
+<script>
+ const tabs=Array.from(document.querySelectorAll<HTMLButtonElement>('[data-read-tab]'));const panels=Array.from(document.querySelectorAll<HTMLElement>('[data-read-panel]'));
+ const activate=(index:number)=>{tabs.forEach((tab,i)=>{tab.setAttribute('aria-selected',String(index===i));tab.tabIndex=index===i?0:-1;panels[i].hidden=index!==i;});};
+ tabs.forEach((tab,i)=>{tab.addEventListener('click',()=>activate(i));tab.addEventListener('keydown',event=>{const index=event.key==='ArrowRight'?(i+1)%3:event.key==='ArrowLeft'?(i+2)%3:event.key==='Home'?0:event.key==='End'?2:-1;if(index>=0){event.preventDefault();activate(index);tabs[index].focus();}});});
+</script>

@@ -2,12 +2,13 @@ import { defineMiddleware } from 'astro:middleware';
 import { AdminError, requireLocalAdmin } from './admin/tournaments.mjs';
 
 export const onRequest = defineMiddleware(async (context, next) => {
-  if (!/^\/admin(?:\/|$)/.test(context.url.pathname)) return next();
+  const officialTool = ['/map-randomizer', '/veto'].includes(context.url.pathname.replace(/\/$/, '')) && context.url.searchParams.has('adminTournament');
+  if (!officialTool && !/^\/admin(?:\/|$)/.test(context.url.pathname)) return next();
   const headers = {
     'Cache-Control': 'no-store',
     'X-Robots-Tag': 'noindex, nofollow',
-    'X-Frame-Options': 'DENY',
-    'Content-Security-Policy': "frame-ancestors 'none'; form-action 'self'; base-uri 'self'",
+    'X-Frame-Options': officialTool ? 'SAMEORIGIN' : 'DENY',
+    'Content-Security-Policy': `frame-ancestors ${officialTool ? "'self'" : "'none'"}; form-action 'self'; base-uri 'self'`,
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'same-origin',
   };
@@ -21,7 +22,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     });
   }
   const path = context.url.pathname.replace(/\/$/, '');
-  const canPost = path === '/admin/tournaments/new' || /^\/admin\/tournaments\/[a-z0-9-]{1,120}\/(?:setup|participants|roster|bracket|matches\/[a-z0-9-]{1,160})$/.test(path);
+  const masterPaths = ['/admin/teams', '/admin/players', '/admin/maps'];
+  const tournamentPaths = ['/admin/tournaments', '/admin/tournaments/new'];
+  const canPost = [...masterPaths, ...tournamentPaths].includes(path)
+    || /^\/admin\/tournaments\/[a-z0-9-]{1,120}$/.test(path)
+    || /^\/admin\/tournaments\/[a-z0-9-]{1,120}\/(?:setup|participants|roster|bracket|maps|matches\/[a-z0-9-]{1,160})$/.test(path);
   const allowed = canPost ? ['GET', 'HEAD', 'POST'] : ['GET', 'HEAD'];
   if (!allowed.includes(context.request.method)) {
     return new Response('Method not allowed.', { status: 405, headers: { ...headers, Allow: allowed.join(', ') } });

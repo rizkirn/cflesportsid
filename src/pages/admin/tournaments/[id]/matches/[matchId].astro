@@ -1,79 +1,70 @@
 ---
 export const prerender=false;
-import { env } from 'cloudflare:workers';
+import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
-import { requireLocalAdmin, AdminError } from '../../../../../admin/tournaments.mjs';
-import { readParticipantState } from '../../../../../admin/participants.mjs';
-import { readMatchDetails, readDetailsForm, saveMatchDetails, mapResults } from '../../../../../admin/match-details.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
-const id=Astro.params.id!;const matchId=Astro.params.matchId!;
-let state;let workspace;let submitted;let message='';let failed=false;
-try {
-  state=await readMatchDetails(db,id,matchId);
-  if(!state)Astro.response.status=404;
-  else {
-    workspace=await readParticipantState(db,id);
-    if(Astro.request.method==='POST') {
-      submitted=await readDetailsForm(Astro.request);
-      await saveMatchDetails(db,id,matchId,submitted);
-      return Astro.redirect(`${Astro.url.pathname}?saved=${submitted.intent==='save-draft'?'draft':'complete'}`,303);
-    }
-  }
-}catch(error) {
-  if(error instanceof AdminError){message=error.message;Astro.response.status=error.status;}
-  else {console.error('[admin] Match details unavailable',error);failed=true;Astro.response.status=503;}
-}
+import MatchDetailsRead from '../../../../../components/admin/MatchDetailsRead.astro';
+import Status from '../../../../../components/admin/StatusBadge.astro';
+import {AdminError,requireLocalAdmin} from '../../../../../admin/tournaments.mjs';
+import {readParticipantState} from '../../../../../admin/participants.mjs';
+import {readMatchDetails,readDetailsForm,saveMatchDetails} from '../../../../../admin/match-details.mjs';
+import {readCorrectionHistory} from '../../../../../admin/corrections.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);const id=Astro.params.id!;const matchId=Astro.params.matchId!;
+const editing=Astro.url.searchParams.get('edit')==='details';
+let state;let workspace;let submitted;let history=[];let message='';let unavailable=false;
+try{
+ state=await readMatchDetails(db,id,matchId,{correction:editing});
+ if(!state)Astro.response.status=404;
+ else{
+ workspace=await readParticipantState(db,id);
+ try{history=(await readCorrectionHistory(db,id,matchId)).filter(entry=>entry.correction_type==='details');}catch(error){if(!/no such table.*match_correction_audit/.test(String(error?.message)))throw error;unavailable=true;}
+ if(editing&&unavailable)state.reason='Detail corrections unavailable.';
+ if(Astro.request.method==='POST'){
+ submitted=await readDetailsForm(Astro.request);await saveMatchDetails(db,id,matchId,submitted);
+ if(Astro.request.headers.get('accept')==='application/json'){const saved=await readMatchDetails(db,id,matchId);return new Response(JSON.stringify({revision:saved.revision,status:saved.status}),{headers:{'content-type':'application/json'}});}
+ return Astro.redirect(`${Astro.url.pathname}?saved=complete`,303);
+ }
+ }
+}catch(error){message=error instanceof AdminError?error.message:'Could not load or save match details.';Astro.response.status=error instanceof AdminError?error.status:503;if(Astro.request.headers.get('accept')==='application/json')return new Response(JSON.stringify({error:message}),{status:Astro.response.status,headers:{'content-type':'application/json'}});}
 const payload=submitted?.payload??state?.payload;
-let structurallyValid=false;let derived='Incomplete';
-if(state&&payload)try {const results=mapResults(payload,state.pool);const a=results.filter(r=>r.side===1).length;derived=`${a}–${3-a}`;structurallyValid=true;}catch{}
-const locked=!!state?.reason;
+const guided=!!state&&!state.reason&&!editing&&!state.payload.correction_required&&['empty','draft'].includes(state.status);
+const writable=!!state&&!state.reason;
+const correction=editing&&state?.correctable||state?.payload.correction_required===true;
+const readMode=!!state&&!writable;
+const Surface=guided?'dialog':'section';
 ---
 <AdminLayout title="Match Details" workspace={workspace}>
-  {failed ? <p class="admin-error" role="alert">Could not load match details. Check the local database migrations and reload.</p> : !state ? <><h1>Match not found</h1><a href={`/admin/tournaments/${id}/matches`}>Back to Matches</a></> : <>
-    <header class="admin-heading detail-heading"><div><h1>Match Details</h1><p class="detail-series">{state.match.team1_name} <strong>{state.match.score1}–{state.match.score2}</strong> {state.match.team2_name}</p><p>Result Confirmed · Fixed 3 Maps · {state.status==='draft'?'Draft':state.status==='complete'?'Completed':locked?'Read-only':'Details Draft'}</p></div><nav><a href={`/admin/tournaments/${id}/matches`}>Back to Matches</a><a href={`/matches/${matchId}`}>View Public Match</a></nav></header>
-    {message&&<p class="admin-error" role="alert">{message} Your entered values are shown below.</p>}
-    {Astro.url.searchParams.get('saved')==='draft'&&<p role="status">Draft saved. Details are not public yet.</p>}
-    {Astro.url.searchParams.get('saved')==='complete'&&<p role="status">Details completed. All three map results and stats from played maps are now public.</p>}
-    {locked&&<p class="admin-help">{state.reason}</p>}
-    <form method="post" class="admin-form detail-editor" data-pending-form data-detail-editor data-score1={state.match.score1} data-score2={state.match.score2}>
-      <input type="hidden" name="revision" value={submitted?.revision??state.revision}/>
-      <script type="application/json" data-validation-state set:html={JSON.stringify({match:state.match,rows:state.rows,pool:state.pool}).replaceAll('<','\\u003c')}/>
-      <p class="detail-summary">Confirmed series score: <strong>{state.match.score1}–{state.match.score2}</strong> · <span data-detail-status>{state.status==='empty'?'No draft saved':state.status==='draft'?'Saved draft':'Completed details'}</span></p>
-      <fieldset disabled={locked} class="detail-section">
-        <legend>1. Map Results</legend>
-        <div class="detail-map-columns" aria-hidden="true"><span></span><span>Map</span><span>{state.match.team1_name}</span><span>{state.match.team2_name}</span><span>Winner</span></div>
-        {payload.maps.map((map,i)=><div class="detail-map-result" data-map-result>
-          <div><h3>Map {i+1}</h3><label for={`mode-${i}`}>Mode</label><select id={`mode-${i}`} name={`maps.${i}.mode`} data-map-mode><option value="played" selected={map.mode!=='walkover'}>Played</option><option value="walkover" selected={map.mode==='walkover'}>W/O</option></select></div>
-          <div><label for={`map-${i}`}>Map</label><select id={`map-${i}`} name={`maps.${i}.map_id`} data-map-id><option value="">Select map</option>{state.pool.map(p=><option value={p.id} selected={map.map_id===p.id}>{p.name}</option>)}</select></div>
-          {[1,2].map(side=><div><label for={`score-${i}-${side}`}>{state.match[`team${side}_name`]} rounds</label><input id={`score-${i}-${side}`} name={`maps.${i}.score${side}`} value={map[`score${side}`]} inputmode="numeric" pattern="[0-9]*" data-map-score/></div>)}
-          <div><label for={`wo-winner-${i}`} data-wo-label hidden={map.mode!=='walkover'}>W/O winner</label><select id={`wo-winner-${i}`} name={`maps.${i}.winner_side`} data-wo-winner hidden={map.mode!=='walkover'}><option value="">Select winner</option>{[1,2].map(side=><option value={String(side)} selected={map.winner_side===String(side)}>{state.match[`team${side}_name`]}</option>)}</select><p data-map-winner>Winner: {map.score1!==''&&map.score2!==''&&map.score1!==map.score2 ? state.match[Number(map.score1)>Number(map.score2)?'team1_name':'team2_name']:'Pending'}</p></div>
-        </div>)}
-        <p class="detail-summary detail-reconcile" aria-live="polite"><span>Confirmed <strong>{state.match.score1}–{state.match.score2}</strong></span><span>Derived <strong data-derived-score>{derived}</strong><span data-reconciliation>{structurallyValid?(derived===`${state.match.score1}–${state.match.score2}`?' · Matches confirmed score':' · Conflicts with confirmed score'):''}</span></span></p>
-      </fieldset>
-      <p class="admin-help" data-stats-gate hidden={structurallyValid}>For each played map, select a map and enter non-tied round scores. For each W/O map, select its winner.</p>
-      <div class="detail-tabs" role="tablist" aria-label="Player stats map">{payload.maps.map((map,i)=><button type="button" role="tab" id={`tab-${i}`} aria-controls={`panel-${i}`} aria-selected={String(i===0)} tabindex={i===0?0:-1} data-map-tab={i}><span data-tab-label>Map {i+1}{map.map_id?` · ${state.pool.find(p=>p.id===map.map_id)?.name}`:''}</span><small data-tab-status></small></button>)}</div>
-      <fieldset class="detail-section" disabled={locked} aria-disabled={String(!structurallyValid||locked)} data-player-section data-locked={String(locked)}>
-        <legend>2. Player Stats</legend>
-        <p class="admin-help">{locked?'Tournament roster · K/D/A · ACE Gold / MVP':'Blank K/D/A = did not play. Zero counts. Enter five players per team and select one ACE Gold / MVP.'}</p>
-        {payload.maps.map((map,i)=><section class="detail-player-map" data-player-map id={`panel-${i}`} role="tabpanel" aria-labelledby={`tab-${i}`} hidden={i!==0}>
-          <h3>Map {i+1}</h3>
-          <p data-wo-stats hidden={map.mode!=='walkover'}>This map was W/O. No player entry or ACE Gold / MVP is required.</p>
-          <div class="detail-team-tables">{[1,2].map(side=><table class="admin-table detail-kda"><caption>{state.match[`team${side}_name`]} · <span data-participation>0 players</span></caption><thead><tr><th scope="col">Tournament IGN</th><th scope="col">K</th><th scope="col">D</th><th scope="col">A</th><th scope="col">MVP</th></tr></thead><tbody>{map.players.map((p,j)=>{
-            const r=state.rows.find(r=>r.player_id===p.player_id);if(!r||r.team_id!==state.match[`team${side}_id`])return null;
-            return <tr data-player-row data-player-id={p.player_id} data-player-label={r.ign_snapshot}>
-              <th scope="row">{r.ign_snapshot}<input type="hidden" name={`maps.${i}.players.${j}.player_id`} value={p.player_id}/></th>
-              {['kills','deaths','assists'].map(k=><td data-label={k[0].toUpperCase()}><input aria-label={`Map ${i+1} ${r.ign_snapshot} ${k}`} name={`maps.${i}.players.${j}.${k}`} value={p[k]} inputmode="numeric" pattern="[0-9]*" data-kda/></td>)}
-              <td data-label="MVP"><label class="detail-mvp-target"><input type="radio" name={`mvp-choice-${i}`} value={p.player_id} checked={map.mvp===p.player_id} aria-label={`Map ${i+1} ACE Gold / MVP: ${r.ign_snapshot}`} data-mvp-choice disabled={locked||!['kills','deaths','assists'].every(k=>p[k]!=='')}/></label></td>
-            </tr>;
-          })}</tbody></table>)}</div>
-          <input type="hidden" name={`maps.${i}.mvp`} value={map.mvp} data-mvp/>
-        </section>)}
-      </fieldset>
-      {!locked&&<div class="admin-actions detail-action-bar"><span data-completion-hint role="status"></span><button type="submit" name="intent" value="save-draft" class="admin-outline" formnovalidate>Save Draft</button><button type="submit" name="intent" value="complete-details" class="admin-button" formnovalidate>Complete Details</button><p role="status" class="admin-submit-status" data-detail-saving></p></div>}
-    </form>
-  </>}
+ {!state?<><h1>Match Details unavailable</h1><p role="alert">{message}</p></>:<>
+ {!guided&&<header class="admin-heading detail-heading"><div><h1>Match Details</h1><p class="detail-series">{state.match.team1_name} <strong>{state.match.result_type==='walkover'?'W/O':`${state.match.score1}-${state.match.score2}`}</strong> {state.match.team2_name}</p><Status label={state.status==='complete'?'Completed':state.status==='draft'?'Draft':readMode?'Read-only':'New details'} tone={state.status==='complete'?'ready':state.status==='draft'?'pending':'neutral'}/></div><div class="admin-actions">{workspace?.tournament.status!=='completed'&&<a class="admin-outline" href={`/admin/tournaments/${id}/bracket?match=${matchId}&edit=result`}>Edit Result</a>}<a href={`/admin/tournaments/${id}/matches`}>Back to Matches</a></div></header>}
+ {message&&<p class="admin-error" role="alert">{message}</p>}
+ {state.match.result_type==='walkover'?<p>Full-match W/O. No Match Details required.</p>:readMode?<>
+ {state.reason&&JSON.parse(state.snapshot).children.every(n=>n===0)&&<p class="admin-help">{state.reason}</p>}
+ <MatchDetailsRead db={db} state={state}/>
+ {state.correctable&&!unavailable&&<a class="admin-outline" href={`${Astro.url.pathname}?edit=details`}>Edit Details</a>}
+ </>:<>
+ <Surface class={guided?'admin-dialog guided-details':'detail-workspace'} data-guided-dialog data-guided={String(guided)} aria-labelledby="detail-title">
+ <header class="admin-heading"><div><h2 id="detail-title">{guided?'Match Details':'Edit Details'}</h2><p>{state.match.team1_name} <strong>{state.match.score1}-{state.match.score2}</strong> {state.match.team2_name}</p></div>{guided&&<button type="button" class="admin-outline" data-guided-close>Close</button>}</header>
+ <form method="post" class="admin-form detail-editor" data-details-form data-guided={String(guided)}>
+ <input type="hidden" name="revision" value={submitted?.revision??state.revision}/>
+ <script type="application/json" data-validation-state set:html={JSON.stringify({match:state.match,rows:state.rows,pool:state.pool,assignments:state.assignments}).replaceAll('<','\\u003c')}/>
+ <div class="detail-tabs" role="tablist" aria-label="Map steps">{payload.maps.map((map,i)=><button type="button" role="tab" data-map-tab={i} aria-selected={String(i===0)} aria-controls={`map-panel-${i}`} id={`map-step-${i}`} tabindex={i===0?0:-1}>Map {i+1}<small data-step-status>Not started</small></button>)}</div>
+ {payload.maps.map((map,i)=><section data-map-panel id={`map-panel-${i}`} role="tabpanel" aria-labelledby={`map-step-${i}`} hidden={i!==0}>
+ <div class="setup-grid"><label>Mode<select name={`maps.${i}.mode`} data-mode><option value="played" selected={map.mode!=='walkover'}>Played</option><option value="walkover" selected={map.mode==='walkover'}>W/O</option></select></label><div><span>Map {i+1}</span><strong class="official-map-name">{state.pool.find(item=>item.id===map.map_id)?.name??'Maps not assigned yet'}</strong><input type="hidden" name={`maps.${i}.map_id`} value={map.map_id} data-map/></div>
+ {[1,2].map(side=><label data-played>{state.match[`team${side}_name`]} rounds<input name={`maps.${i}.score${side}`} value={map[`score${side}`]} inputmode="numeric" pattern="[0-9]*"/></label>)}
+ <label data-walkover>W/O winner<select name={`maps.${i}.winner_side`}><option value="">Select winner</option>{[1,2].map(side=><option value={String(side)} selected={map.winner_side===String(side)}>{state.match[`team${side}_name`]}</option>)}</select></label></div>
+ <div class="detail-team-tables" data-played>{[1,2].map(side=><table class="admin-table detail-kda"><caption>{state.match[`team${side}_name`]} · <span data-player-count></span></caption><thead><tr><th>IGN</th><th>K</th><th>D</th><th>A</th><th>MVP</th></tr></thead><tbody>{map.players.map((player,j)=>{const row=state.rows.find(row=>row.player_id===player.player_id);if(!row||row.team_id!==state.match[`team${side}_id`])return null;return <tr data-stat-row><th scope="row">{row.ign_snapshot}<input type="hidden" name={`maps.${i}.players.${j}.player_id`} value={player.player_id}/></th>{['kills','deaths','assists'].map(key=><td><input name={`maps.${i}.players.${j}.${key}`} value={player[key]} inputmode="numeric" pattern="[0-9]*" aria-label={`Map ${i+1} ${row.ign_snapshot} ${key}`} data-kda/></td>)}<td><label class="detail-mvp-target"><input type="radio" name={`mvp-choice-${i}`} value={player.player_id} checked={map.mvp===player.player_id} aria-label={`Gold ACE ${row.ign_snapshot}`} data-mvp-choice/></label></td></tr>;})}</tbody></table>)}</div>
+ <input type="hidden" name={`maps.${i}.mvp`} value={map.mvp} data-mvp/>
+ <p data-walkover>W/O map. No player statistics or MVP.</p>
+ </section>)}
+ <p data-derived-score role="status"></p><p data-detail-status role="status">{state.status==='draft'?'Draft saved':''}</p><p class="admin-error" data-detail-error role="alert"></p>
+ {correction&&<label>Correction reason<input name="reason" value={submitted?.reason??''} maxlength="1000" required/></label>}
+ <div class="admin-actions detail-action-bar">{guided?<><button type="button" class="admin-outline" data-previous>Previous</button><button type="button" class="admin-button" data-next>Next</button><button type="submit" name="intent" value="complete-details" class="admin-button" data-complete>Complete Details</button></>:<><button type="submit" name="intent" value={editing&&state.correctable?'correct-details':'complete-details'} class="admin-button">{correction?'Save Correction':'Complete Details'}</button><a href={Astro.url.pathname}>Cancel</a></>}</div>
+ </form>
+ </Surface>
+ </>}
+ {!guided&&history.length>0&&<section class="detail-section"><h2>Correction History ({history.length})</h2><ol>{history.map(entry=><li><time datetime={entry.created_at}>{new Date(entry.created_at).toLocaleString('en-GB',{timeZone:'Asia/Jakarta'})}</time><p>{entry.reason}</p></li>)}</ol></section>}
+ </>}
 </AdminLayout>
 <script>
-  import { setupDetailEditor } from '../../../../../admin/match-details-editor';
-  setupDetailEditor();
+ import {setupGuidedDetails} from '../../../../../admin/guided-details';
+ setupGuidedDetails();
 </script>

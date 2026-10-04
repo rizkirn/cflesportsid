@@ -1,11 +1,9 @@
 # Match Details Editor (Phase B)
 
-Open Matches in the tournament workspace and choose Enter Match Details on a confirmed
-series. A saved draft shows Continue Match Details; completed details show
-Details completed and View Match Details. Bracket result cards offer the same
-actions, with View public match as the secondary link. Unconfirmed matches have
-no detail action. Imported canonical rows show Details entered (read-only) and
-View Match Details without claiming that a Phase B completion occurred.
+Open global Matches and click a confirmed played match. Empty/draft details open
+a large guided Map 1/2/3 dialog. Existing/imported/completed details open a dedicated
+compact read page; Edit Details enters correction semantics when supported.
+Full-match W/O and unconfirmed matches route to their Bracket result dialog.
 The route is `/admin/tournaments/:id/matches/:matchId`. Admin stays local,
 development-only and loopback-only, with bounded same-origin forms. Astro renders
 the page; a small TypeScript script updates derived scores and roster eligibility.
@@ -75,7 +73,8 @@ only `match_detail_edits(match_id,status,payload,revision)`. Applied migration
 0003 is unchanged. Do not apply 0004 remotely as part of this implementation;
 review and coordinate its later deployment separately.
 
-Save Draft stores the complete editor document as JSON with status `draft` and
+Automatic step/debounced saves use the existing save-draft API, which stores the
+complete editor document as JSON with status `draft` and
 increments its revision. It allows missing maps, scores, K/D/A and MVP selections,
 and partial K/D/A. Supplied values still need valid types, non-negative whole
 numbers, roster identities and map choices. It writes no rows to `match_maps`,
@@ -146,3 +145,22 @@ bindings, `remote:false`, and a temporary `.dev.vars` draw key next to that
 generated configuration. Leave local `wrangler.jsonc` untouched. Run reference
 build regressions before starting browser verification; they can invalidate the
 development server's shared dependency cache.
+
+## Official map consumption (0008)
+
+New operational details use the confirmed round randomizer or match veto map IDs.
+The editor displays map names and hidden fixed IDs; it never offers another map
+selector. Missing assignments show “Maps not assigned yet”. Completion validates
+each slot against the current official assignment, and stale assignment/context
+changes invalidate the draft revision. Assigned maps remain resolvable when later
+marked inactive in the master pool. Existing S1/S2 imported details remain read-only.
+
+Partial map W/O retains the assigned map name in canonical/public details, such as
+ISLAND · W/O. Full-match W/O before assignment needs no map details. Fixed 3 Maps
+still requires three decided slots, not a best-of-three stopping rule. Played slots
+retain five players per side, K/D/A and Gold ACE validation; W/O slots do not create
+combat statistics. Guided drafts survive map changes and close/reopen. Selected tabs
+show Editing, Complete or W/O; only the final step offers Complete Details.
+Completed details use compact read mode, with correction history next to content.
+Empty result history is hidden; corrections use Result History (N). Ordinary
+progression copy is brief, while winner correction reveals downstream conflicts.

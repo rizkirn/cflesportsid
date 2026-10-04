@@ -1,91 +1,77 @@
 ---
-export const prerender = false;
-import { env } from 'cloudflare:workers';
+export const prerender=false;
+import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
-import { readRosterState, workspaceRosterForm, readWorkspaceRosterForm, editWorkspaceRoster, saveWorkspaceRoster, rosterCopySource } from '../../../../admin/roster.mjs';
-const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let state; let form; let errorMessage = ''; let draft = false;
-try {
-  state = await readRosterState(db, Astro.params.id);
-  if (!state) Astro.response.status = 404;
-  else {
-    form = workspaceRosterForm(state);
-    if (Astro.request.method === 'POST') {
-      form = await readWorkspaceRosterForm(Astro.request);
-      if (form.intent === 'save' && form.remove_entry === undefined && form.copy_team === undefined) {
-        await saveWorkspaceRoster(db, state.tournament.id, form);
-        return Astro.redirect(`/admin/tournaments/${state.tournament.id}/roster?saved=1`, 303);
-      }
-      form = editWorkspaceRoster(form,state); draft = true;
-    }
-  }
-} catch (error) {
-  if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
-  else { console.error('[admin] Roster failed',error); errorMessage = 'Could not load or save the roster. Reload to review saved records.'; Astro.response.status = 503; }
-  draft = Astro.request.method === 'POST';
-  if (state?.locked) { form = workspaceRosterForm(state); draft = false; }
-}
-const editable = state?.ready && !state.locked;
-const available = state?.players.filter(player => !form?.entries.some(entry => entry.id === player.id)) ?? [];
-const readyCount = state?.roster.teams.filter(team => team.ready).length ?? 0;
+import UnsavedChanges from '../../../../components/admin/UnsavedChanges.astro';
+import Status from '../../../../components/admin/StatusBadge.astro';
+import {rosterReadiness} from '../../../../admin/roster-snapshot.mjs';
+import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {readRosterState,workspaceRosterForm,readWorkspaceRosterForm,editWorkspaceRoster,saveWorkspaceRoster,validateWorkspaceRoster} from '../../../../admin/roster.mjs';
+import {saveMaster} from '../../../../admin/master-data.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let state;let form;let message='';let draft=false;let created=false;
+try{
+ state=await readRosterState(db,Astro.params.id);
+ if(!state)Astro.response.status=404;
+ else{form=workspaceRosterForm(state);draft=form.entries.length>state.rows.length;if(Astro.request.method==='POST'){
+ form=await readWorkspaceRosterForm(Astro.request);
+ if(form.intent==='create-player'){
+ if(state.locked||state.revision!==form.revision)throw new AdminError('Roster changed. Reload before creating a player.',409);
+ validateWorkspaceRoster(form,state);
+ if(!state.participants.some(team=>team.id===form.team_id)||form.entries.filter(row=>row.team_id===form.team_id).length>=7)throw new AdminError('Select a team with an available roster slot.');
+ const id=await saveMaster(db,'players',null,{intent:'create',uid:form.new_uid,current_ign:form.new_ign,name:form.new_name,current_team_id:form.team_id});
+ state=await readRosterState(db,state.tournament.id);form.intent='add-existing';form.player_id=id;form=editWorkspaceRoster(form,state);form.new_uid='';form.new_ign='';form.new_name='';draft=true;created=true;
+ }else{
+ if(form.intent==='save'&&form.remove_entry===undefined){await saveWorkspaceRoster(db,state.tournament.id,form);return Astro.redirect(`/admin/tournaments/${state.tournament.id}/maps`,303);}
+ form=editWorkspaceRoster(form,state);draft=true;
+ }
+ }}
+}catch(error){message=error instanceof AdminError?error.message:'Could not save roster. Review and try again.';Astro.response.status=error instanceof AdminError?error.status:503;if(state?.locked)form=workspaceRosterForm(state);}
+const editable=state?.ready&&!state.locked;
+const available=state?.players.filter(player=>!form?.entries.some(entry=>entry.id===player.id))??[];
+const ready=state&&form?rosterReadiness(state.participants,form.entries.map((row,index)=>[row.team_id,row.id,row.ign,index+1,state.players.some(player=>player.id===row.id)?1:0])):null;
+const needs=ready?.teams.filter(team=>!team.ready).length??0;
+const active=form?.active_team??form?.team_id;
 ---
-<AdminLayout title="Tournament Roster" workspace={state}>
-  {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
-  {!state || !form ? <><h1>Tournament roster unavailable</h1><a href="/admin">Return to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Tournament Roster</p></div><span>{readyCount} / {state.participants.length} teams ready</span></header>
-    {!editable && <p class="admin-next">Roster is read-only. {state.locked ? 'The tournament has started or its official bracket is saved.' : 'Save Setup and add Participants first.'}</p>}
-    <p class="admin-help">Register 5 to 7 players per team. Tournament IGN is a snapshot for this tournament. Editing it leaves the current player profile unchanged. Move a player by changing their Team, then save. Partial rosters can be saved; every roster must be ready before drawing.</p>
-    {Astro.url.searchParams.has('saved') && <p role="status">Tournament roster saved.</p>}
-    {draft && <p class="participant-notice" role="status">Unsaved roster changes. Review the table and Save Roster to apply them.</p>}
-    <form method="post" class="admin-form roster-workspace" data-pending-form data-roster-form>
-      <input type="hidden" name="revision" value={form.revision} />
-      <div class="table-toolbar"><div><label for="roster-search">Find team or player</label><input id="roster-search" type="search" autocomplete="off" /></div>{editable && <button class="admin-button" type="submit" name="intent" value="save">Save Roster</button>}</div>
-      <p data-roster-search-status class="admin-help" role="status" aria-live="polite"></p>
-      {state.participants.map(team => {
-        const entries = form.entries.map((entry,index) => ({entry,index})).filter(({entry}) => entry.team_id === team.id);
-        const saved = state.roster.teams.find(row => row.id === team.id);
-        const source = !entries.length && editable ? rosterCopySource(state,team.id) : null;
-        const search = `${team.name} ${team.tag} ${entries.map(({entry}) => { const player = state.players.find(player => player.id === entry.id); return `${entry.ign} ${player?.name ?? entry.name} ${player?.uid ?? entry.uid}`; }).join(' ')}`.normalize('NFKC').toLowerCase();
-        return <section class="roster-team" data-roster-team data-search={search} id={`team-${team.id}`}>
-          <header class="admin-heading"><h2>{team.name}</h2><span>{entries.length} / 7 players · {draft ? 'Unsaved' : saved?.ready ? 'Ready' : 'Incomplete'}</span></header>
-          {source && <div class="admin-actions"><button class="admin-outline" type="submit" name="copy_team" value={team.id} formnovalidate>{source.kind === 'previous' ? 'Copy Previous Tournament Roster' : 'Copy Current Team Roster'}</button><span class="admin-help">{source.entries.length} players. {source.kind === 'current' ? 'Use current team data as a starting draft; this is not a historical roster.' : 'Use the previous tournament roster as a starting draft.'} Review Tournament IGN, then Save Roster.</span></div>}
-          {entries.length ? <table class="admin-table"><caption class="sr-only">{team.name} tournament roster</caption><thead><tr><th scope="col">Player / UID</th><th scope="col">Tournament IGN</th><th scope="col">Team</th>{editable && <th scope="col">Remove</th>}</tr></thead><tbody>{entries.map(({entry,index}) => {
-            const player = state.players.find(player => player.id === entry.id);
-            return <tr>
-              <td data-label="Player / UID"><strong>{player?.name ?? entry.name}</strong><small>{player?.uid ?? entry.uid ?? 'No UID'}{!entry.id && ' · New player draft'}</small>
-                {['id','name','uid'].map(key => <input type="hidden" name={`entries.${index}.${key}`} value={entry[key as keyof typeof entry]} />)}
-              </td>
-              <td data-label="Tournament IGN">{editable ? <input name={`entries.${index}.ign`} value={entry.ign} maxlength="120" required aria-label={`Tournament IGN for ${player?.name ?? entry.name}`} /> : entry.ign}</td>
-              <td data-label="Team">{editable ? <select name={`entries.${index}.team_id`} aria-label={`Team for ${player?.name ?? entry.name}`}>{state.participants.map(target => <option value={target.id} selected={target.id === entry.team_id}>{target.name}</option>)}</select> : team.name}</td>
-              {editable && <td data-label="Remove"><button class="admin-outline" type="submit" name="remove_entry" value={index} formnovalidate aria-label={`Remove ${player?.name ?? entry.name}`}>Remove</button></td>}
-            </tr>;
-          })}</tbody></table> : <p class="admin-empty">No players registered for this team. {editable && 'Choose this team in Add Player below.'}</p>}
-        </section>;
-      })}
-      {!state.participants.length && <p class="admin-empty">No participant teams. Add teams in Participants to manage their rosters.</p>}
-      <p class="admin-empty" data-no-rosters hidden>No team or player matches. Change the search to show other rosters.</p>
-      {editable && state.participants.length > 0 && <section class="participant-add"><h2>Add Player</h2>
-        <div class="setup-grid"><div><label for="team_id">Destination team</label><select id="team_id" name="team_id">{state.participants.map(team => <option value={team.id} selected={form.team_id === team.id}>{team.name}</option>)}</select></div><div><label for="player-search">Search existing players</label><input id="player-search" type="search" autocomplete="off" /></div></div>
-        <label for="player_id">Existing player</label><select id="player_id" name="player_id"><option value="">Select a player</option>{available.map(player => <option value={player.id} selected={form.player_id === player.id}>{player.current_ign} · {player.name} · {player.uid ?? 'No UID'}</option>)}</select>
-        <p class="admin-help" data-player-status role="status">Only players absent from this draft are available.</p><button class="admin-outline" type="submit" name="intent" value="add-existing" formnovalidate>Add Existing Player</button>
-        <details class="participant-create" open={!!form.new_name || form.intent === 'add-new'}><summary>Create Player</summary><div class="setup-grid"><div><label for="new_name">Player name</label><input id="new_name" name="new_name" value={form.new_name} maxlength="120" /></div><div><label for="new_ign">Tournament IGN</label><input id="new_ign" name="new_ign" value={form.new_ign} maxlength="120" /></div><div><label for="new_uid">Player UID (optional)</label><input id="new_uid" name="new_uid" value={form.new_uid} maxlength="64" /></div></div><p class="admin-help">The player profile is created when you save. Its initial current IGN uses this name; later tournament edits affect only the snapshot.</p><button class="admin-outline" type="submit" name="intent" value="add-new" formnovalidate>Add New Player</button></details>
-      </section>}
-      <div class="admin-actions">{editable && <button class="admin-button" type="submit" name="intent" value="save">Save Roster</button>}{state.roster.ready || state.locked ? <a href={`/admin/tournaments/${state.tournament.id}/bracket`}>Review Bracket</a> : <span class="admin-help">Complete every saved roster to enable Official Draw.</span>}</div>
-      <p class="admin-submit-status admin-help" role="status" aria-live="polite"></p><p data-roster-dirty class="admin-help" role="status" hidden>Unsaved roster changes. Save before leaving this page.</p>
-    </form>
-  </>}
+<AdminLayout title="Roster" workspace={state}>
+ {message&&<p class={created?'':'admin-error'} role={created?'status':'alert'}>{message}</p>}
+ {!state||!form?<h1>Roster unavailable</h1>:<>
+ <header class="admin-heading"><h1>Roster</h1></header>
+ <p>{state.participants.length} teams · {form.entries.length} players · {needs?`${needs} ${needs===1?'roster needs':'rosters need'} attention`:'All rosters ready'}</p>
+ {!editable&&<p class="admin-next">Roster is read-only.</p>}
+ {Astro.url.searchParams.has('saved')&&<p role="status">Roster saved.</p>}
+ {draft&&<p role="status">Draft roster. Review and Save Roster.</p>}
+ <form method="post" class="admin-form" data-pending-form data-roster-form data-draft-form data-dirty={String(draft||Astro.request.method==='POST')}>
+ <input type="hidden" name="revision" value={form.revision}/>
+ <input type="hidden" name="active_team" value={active}/>
+ {state.participants.length>8&&<label>Search teams<input type="search" data-roster-search/></label>}
+ {state.participants.map(team=>{const entries=form.entries.map((entry,index)=>({entry,index})).filter(({entry})=>entry.team_id===team.id);return <details class="roster-team" name="roster-teams" open={active===team.id} data-roster-team data-team-id={team.id} data-search={`${team.name} ${team.tag}`.toLowerCase()}>
+ <summary><strong>{team.name}</strong><span class="roster-count">{entries.length}/7</span><Status label={ready?.teams.find(row=>row.id===team.id)?.ready?'Ready':'Needs attention'} tone={ready?.teams.find(row=>row.id===team.id)?.ready?'ready':'pending'}/></summary>
+ {entries.length?<table class="admin-table operational-table"><thead><tr><th>UID</th><th>Tournament IGN</th>{editable&&<th>Action</th>}</tr></thead><tbody>{entries.map(({entry,index})=>{const player=state.players.find(player=>player.id===entry.id);return <tr><td data-label="UID">{player?.uid??entry.uid??'Not set'}{['id','name','uid','team_id'].map(key=><input type="hidden" name={`entries.${index}.${key}`} value={entry[key]}/>)}</td><td data-label="Tournament IGN">{editable?<input name={`entries.${index}.ign`} value={entry.ign} maxlength="120" required aria-label={`Tournament IGN ${entry.ign}`}/>:entry.ign}</td>{editable&&<td data-label="Action"><button class="admin-outline" type="submit" name="remove_entry" value={index} formnovalidate>Remove</button></td>}</tr>;})}</tbody></table>:<p class="admin-empty">No players.</p>}
+ {editable&&entries.length<7&&<button type="button" class="admin-outline" data-add-player data-team={team.id}>+ Add Player</button>}
+ </details>;})}
+ {!state.participants.length&&<p class="admin-empty">Add teams in Participants first.</p>}
+ {editable&&<div class="draft-action-bar admin-actions" data-draft-bar hidden><span>Unsaved roster changes</span><button type="submit" class="admin-button" name="intent" value="save">Save Roster</button><p class="admin-submit-status" role="status"></p></div>}
+ <dialog class="admin-dialog" data-player-dialog aria-labelledby="player-title"><header class="admin-heading"><h2 id="player-title">Add Player</h2><button class="admin-outline" type="button" data-close-player>Close</button></header><input type="hidden" name="team_id" value={form.team_id}/><input type="hidden" name="player_id" value=""/><label>Search UID / IGN<input type="search" data-player-search autocomplete="off" aria-controls="player-results"/></label><div id="player-results" class="player-typeahead" data-player-results>{available.map(player=><button type="submit" class="admin-outline" name="intent" value="add-existing" formnovalidate data-player-id={player.id} data-search={`${player.uid??''} ${player.current_ign}`.toLowerCase()} hidden>{player.uid??'No UID'} · {player.current_ign}</button>)}</div><p data-player-empty role="status">Type a UID or IGN.</p><button type="button" class="admin-outline" data-create-player hidden>+ Create New Player</button></dialog>
+ <dialog class="admin-dialog" data-create-player-dialog aria-labelledby="create-player-title"><header class="admin-heading"><h2 id="create-player-title">Create Player</h2><button type="button" class="admin-outline" data-close-create-player>Close</button></header><label>UID<input name="new_uid" value={form.new_uid} maxlength="64"/></label><label>Current IGN<input name="new_ign" value={form.new_ign} maxlength="120"/></label><label>Name (optional)<input name="new_name" value={form.new_name} maxlength="120"/></label><button class="admin-button" type="submit" name="intent" value="create-player" formnovalidate>Create &amp; Add</button></dialog>
+ </form>
+ <UnsavedChanges message="Unsaved roster changes"/>
+ </>}
 </AdminLayout>
 <script>
-  const search = document.querySelector<HTMLInputElement>('#roster-search'); const teams = Array.from(document.querySelectorAll<HTMLElement>('[data-roster-team]')); const searchStatus = document.querySelector('[data-roster-search-status]');
-  const filter = () => { const query = search?.value.normalize('NFKC').trim().toLowerCase() ?? ''; teams.forEach(team => { team.hidden = !team.dataset.search?.includes(query); }); const count = teams.filter(team => !team.hidden).length; if (searchStatus) searchStatus.textContent = `${count} teams shown`; const empty = document.querySelector<HTMLElement>('[data-no-rosters]'); if (empty) empty.hidden = count > 0; };
-  search?.addEventListener('input', filter); search?.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
-  const playerSearch = document.querySelector<HTMLInputElement>('#player-search'); const players = document.querySelector<HTMLSelectElement>('#player_id'); const status = document.querySelector('[data-player-status]');
-  if (players && playerSearch) {
-    const options = Array.from(players.options).slice(1).map(option => ({ value: option.value, text: option.text }));
-    playerSearch.addEventListener('input', () => { const selected = players.value; const query = playerSearch.value.normalize('NFKC').trim().toLowerCase(); const matches = options.filter(option => option.text.normalize('NFKC').toLowerCase().includes(query)); players.replaceChildren(new Option('Select a player',''), ...matches.map(option => new Option(option.text,option.value))); if (matches.some(option => option.value === selected)) players.value = selected; if (status) status.textContent = matches.length ? `${matches.length} players available` : 'No matching player. Change the search or Create Player.'; });
-    playerSearch.addEventListener('keydown', event => { if (event.key === 'Enter') event.preventDefault(); });
-  }
-  const form = document.querySelector<HTMLFormElement>('[data-roster-form]'); const dirty = document.querySelector<HTMLElement>('[data-roster-dirty]');
-  form?.addEventListener('change', event => { const target = event.target as HTMLInputElement; if (target.name && dirty) dirty.hidden = false; });
+ const form=document.querySelector<HTMLFormElement>('[data-roster-form]');const dialog=document.querySelector<HTMLDialogElement>('[data-player-dialog]');const create=document.querySelector<HTMLDialogElement>('[data-create-player-dialog]');
+ const accordions=Array.from(document.querySelectorAll<HTMLDetailsElement>('[data-roster-team]'));accordions.forEach(section=>section.addEventListener('toggle',()=>{if(!section.open)return;accordions.forEach(other=>{if(other!==section)other.open=false;});const active=form?.querySelector<HTMLInputElement>('[name=active_team]');if(active)active.value=section.dataset.teamId!;}));
+ const team=form?.querySelector<HTMLInputElement>('[name=team_id]');const selected=form?.querySelector<HTMLInputElement>('[name=player_id]');
+ const search=document.querySelector<HTMLInputElement>('[data-player-search]');const results=Array.from(document.querySelectorAll<HTMLButtonElement>('[data-player-id]'));const empty=document.querySelector<HTMLElement>('[data-player-empty]');
+ const filter=()=>{const query=search?.value.trim().toLowerCase()??'';results.forEach(button=>button.hidden=!query||!button.dataset.search!.includes(query));const found=results.some(button=>!button.hidden);if(empty)empty.textContent=query?found?'':'No eligible players.':'Type a UID or IGN.';const createButton=document.querySelector<HTMLElement>('[data-create-player]');if(createButton)createButton.hidden=!query||found;};
+ document.querySelectorAll<HTMLElement>('[data-add-player]').forEach(button=>button.addEventListener('click',()=>{if(team)team.value=button.dataset.team!;if(search)search.value='';filter();dialog?.showModal();search?.focus();}));
+ document.querySelector('[data-close-player]')?.addEventListener('click',()=>{if(selected)selected.value='';dialog?.close();});
+ dialog?.addEventListener('cancel',()=>{if(selected)selected.value='';});
+ results.forEach(button=>button.addEventListener('click',()=>{if(selected)selected.value=button.dataset.playerId!;}));
+ search?.addEventListener('input',filter);
+ search?.addEventListener('keydown',event=>{const matches=results.filter(button=>!button.hidden);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();(event.key==='ArrowDown'?matches[0]:matches.at(-1))?.focus();}if(event.key==='Enter'){event.preventDefault();matches[0]?.click();}});
+ results.forEach(button=>button.addEventListener('keydown',event=>{const matches=results.filter(item=>!item.hidden);const index=matches.indexOf(button);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();matches[(index+(event.key==='ArrowDown'?1:matches.length-1))%matches.length]?.focus();}}));
+ const clearCreate=()=>{form?.querySelectorAll<HTMLInputElement>('[name=new_uid],[name=new_ign],[name=new_name]').forEach(input=>input.value='');};
+ document.querySelector('[data-create-player]')?.addEventListener('click',()=>{const query=search?.value.trim()??'';dialog?.close();create?.showModal();const uid=form?.querySelector<HTMLInputElement>('[name=new_uid]');const ign=form?.querySelector<HTMLInputElement>('[name=new_ign]');if(uid)uid.value=/^\d+$/.test(query)?query:'';if(ign)ign.value=/^\d+$/.test(query)?'':query;});document.querySelector('[data-close-create-player]')?.addEventListener('click',()=>{clearCreate();create?.close();});create?.addEventListener('cancel',clearCreate);
+ document.querySelector<HTMLInputElement>('[data-roster-search]')?.addEventListener('input',event=>{const query=(event.target as HTMLInputElement).value.toLowerCase();document.querySelectorAll<HTMLElement>('[data-roster-team]').forEach(team=>team.hidden=!team.dataset.search!.includes(query));});
 </script>

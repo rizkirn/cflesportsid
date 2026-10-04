@@ -6,10 +6,11 @@ const consumers = ['index.astro', 'matches/index.astro', 'matches/[id].astro', '
 const walk = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(`${dir}/${e.name}`) : [`${dir}/${e.name}`]);
 test('all audited frontend match consumers use runtime reads', () => {
   for (const file of consumers) {
-    const source = readFileSync(`src/pages/${file}`, 'utf8');
+    const page = readFileSync(`src/pages/${file}`, 'utf8');
+    const source=file==='veto.astro'?page+readFileSync('src/components/tools/VetoTool.astro','utf8'):page;
     assert.match(source, /export const prerender = false;/, file);
     assert.match(source, /await getFrontendMatches\(\)/, file);
-    assert.doesNotMatch(source, /getStaticPaths|Astro\.props/, file);
+    assert.doesNotMatch(page, /getStaticPaths|Astro\.props/, file);
   }
   for (const file of walk('src').filter(f => /\.(astro|ts|mjs)$/.test(f) && f !== 'src/data-access/frontend-matches.ts')) {
     assert.doesNotMatch(readFileSync(file, 'utf8'), /get(?:Collection|Entry)\(\s*['"]matches['"]/, file);

@@ -1,0 +1,9 @@
+---
+const {definition,key,values,teams,creating=false}=Astro.props;
+---
+{definition.fields.map((field,index)=><label>{definition.labels[index]}
+ {field==='active'?<select name={field}><option value="1" selected={String(values[field]??1)==='1'}>Active</option><option value="0" selected={String(values[field])==='0'}>Inactive</option></select>
+ :field==='current_team_id'?<select name={field}><option value="">Unassigned</option>{teams.map(team=><option value={team.id} selected={values[field]===team.id}>{team.name}</option>)}</select>
+ :field==='description'?<textarea name={field} maxlength="2000">{values[field]}</textarea>
+ :<input name={field} value={values[field]??''} readonly={field==='uid'&&!creating} maxlength={['logo','thumbnail'].includes(field)?2048:field==='color'?7:field==='uid'?64:120} required={['name','tag','region','current_ign'].includes(field)&&!(key==='players'&&field==='name')||field==='uid'&&creating}/>}
+ </label>)}

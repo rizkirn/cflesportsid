@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import {writeFileSync} from 'node:fs';
+import {html,post,fields,create,participantsForm,draw} from './admin-http-fixture.mjs';
+
+const name=`Operations Visual UAT ${crypto.randomUUID().slice(0,8)}`;
+const root=await create(name,8,'2026-12-01');
+const activity=page=>page.slice(page.indexOf(`<h3><a href="${root}"`),page.indexOf('</article>',page.indexOf(`<h3><a href="${root}"`)));
+let overview=await html('/admin');assert.match(overview,/Needs Attention/);assert.doesNotMatch(activity(overview),/<table/);assert.match(activity(overview),/Open Participants/);
+const teams=['familia-nova','paman','howl-tvj','demigod-kage','fearless','cha-tra-mue','k2-evolve','g2c-prmx'];
+await post(root+'/participants',participantsForm(await html(root+'/participants'),teams));
+assert.match(activity(await html('/admin')),/Open Roster/);
+let form=fields(await html(root+'/roster'));form.set('intent','save');await post(root+'/roster',form);
+overview=await html('/admin');assert.match(activity(overview),/Complete Quarter Final maps/);assert.match(activity(overview),/Open Maps/);
+const path=root+'/maps?round=quarter-final';let page=await html(path);
+const maps=JSON.parse(page.match(/data-maps="([^"]+)"/)[1].replaceAll('&quot;','"').replaceAll('&amp;','&')).slice(0,3).map(map=>map.id);
+form=fields(page);form.set('maps',JSON.stringify(maps));form.set('actions','[]');await post(path,form);
+assert.match(activity(await html('/admin')),/Create the official bracket/);
+const matches=await draw(root,1);
+assert.match(activity(await html('/admin')),/Open Match/);
+const result=root+'/bracket?match='+matches[0];form=fields(await html(result));form.set('intent','edit-result');form.set('result_type','played');form.set('score1','2');form.set('score2','1');form.set('confirmed','yes');await post(result,form);
+overview=await html('/admin');assert.match(activity(overview),/1 match details entry pending/);assert.match(activity(overview),/Open Matches/);
+assert.match(await html(root+'/matches'),/Details Pending/);
+const confirmed=await html(path);assert.equal(await html(path),confirmed);assert.doesNotMatch(confirmed,/data-confirm-maps|data-official="true"/);
+writeFileSync('/private/tmp/cfl-visual-fixture.json',JSON.stringify({name,root,matches,maps}));
+console.log(`Overview presentation HTTP PASS: existing state drives Participants → Roster → Maps → Bracket → Match → Details Pending; read-only confirmed maps unchanged. ${root}`);

@@ -1,21 +1,34 @@
 ---
-export const prerender = false;
-import { env } from 'cloudflare:workers';
+export const prerender=false;
+import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
-import { readRosterState } from '../../../../admin/roster.mjs';
-const db = requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
-let state; let message = '';
-try { state = await readRosterState(db,Astro.params.id); if (!state) Astro.response.status = 404; }
-catch(error) { message = error instanceof AdminError ? error.message : 'Could not load tournament state. Reload to try again.'; Astro.response.status = error instanceof AdminError ? error.status : 503; }
-const base = state ? `/admin/tournaments/${state.tournament.id}` : '';
-const next = !state?.ready ? ['Setup','/setup'] : state.participants.length < 2 ? ['Participants','/participants'] : !state.roster.ready ? ['Roster','/roster'] : ['Bracket','/bracket'];
+import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {readRosterState} from '../../../../admin/roster.mjs';
+import {readSetup,setupForm,readSetupForm,saveSetup} from '../../../../admin/setup.mjs';
+import {readCompletion,readCompletionForm,completeTournament} from '../../../../admin/completion.mjs';
+import Status from '../../../../components/admin/StatusBadge.astro';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let state;let setup;let values;let completion;let message='';
+try{state=await readRosterState(db,Astro.params.id);if(!state)Astro.response.status=404;else{setup=await readSetup(db,state.tournament.id);values=setupForm(setup);completion=await readCompletion(db,state.tournament.id);if(Astro.request.method==='POST'){if(Astro.url.searchParams.get('action')==='complete'){const form=await readCompletionForm(Astro.request);await completeTournament(db,state.tournament.id,form);return Astro.redirect(`${Astro.url.pathname}?saved=completed`,303);}values=await readSetupForm(Astro.request);await saveSetup(db,state.tournament.id,values);return Astro.redirect(`${Astro.url.pathname}?saved=setup`,303);}}}catch(error){message=error instanceof AdminError?error.message:'Could not load or save tournament.';Astro.response.status=error instanceof AdminError?error.status:503;}
+const base=state?`/admin/tournaments/${state.tournament.id}`:'';
+const placementName=id=>completion?.teams.find(team=>team.id===id)?.name??id;
 ---
 <AdminLayout title="Tournament Overview" workspace={state}>
-  {message && <p class="admin-error" role="alert">{message}</p>}
-  {!state ? <><h1>Tournament unavailable</h1><a href="/admin">Return to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Overview</p></div><span>{state.tournament.status}</span></header>
-    <dl class="admin-defaults"><div><dt>Bracket capacity</dt><dd>{state.stage?.[3] ?? 'Setup required'}</dd></div><div><dt>Participants</dt><dd>{state.participants.length} teams</dd></div><div><dt>Saved rosters</dt><dd>{state.roster.teams.filter(team => team.ready).length} / {state.participants.length} ready</dd></div><div><dt>Editing</dt><dd>{state.locked ? 'Read-only' : 'Open'}</dd></div></dl>
-    {state.locked ? <section class="admin-next"><h2>Tournament is read-only</h2><p>Setup, Participants and Roster remain available in the sidebar. Matches are viewable; scheduling and results editing are not available yet.</p><a href={`${base}/matches`}>View Matches</a></section> : <section class="admin-next"><h2>{next[0] === 'Bracket' ? 'Ready for Official Draw' : `Review ${next[0]}`}</h2><p>Save setup and participant rosters before drawing. Confirming the official bracket locks Setup, Participants and Roster.</p><a class="admin-button" href={`${base}${next[1]}`}>Open {next[0]}</a></section>}
-  </>}
+ {message&&<p class="admin-error" role="alert">{message}</p>}
+ {!state||!values?<h1>Tournament unavailable</h1>:<>
+ <header class="admin-heading"><h1>Overview</h1>{!setup.locked&&<a href={`/admin/tournaments?selected=${encodeURIComponent(state.tournament.id)}`}>Edit Tournament</a>}</header>
+ <dl class="admin-defaults"><div><dt>Teams</dt><dd>{state.participants.length}/{values.bracket_size}</dd></div><div><dt>Saved rosters</dt><dd>{state.roster.teams.filter(team=>team.ready).length}/{state.participants.length}</dd></div><div><dt>Maps per match</dt><dd>{values.map_count}</dd></div><div><dt>Bronze Match</dt><dd>{values.bronze_match==='1'?'Included':'None'}</dd></div></dl>
+ {state.tournament.status==='completed'||completion?.ready?<section class="detail-section" aria-labelledby="completion-title"><header class="admin-heading"><h2 id="completion-title">{state.tournament.status==='completed'?'Tournament completed':'All matches completed'}</h2><Status label={state.tournament.status==='completed'?'Completed':'Ready to complete'} tone="ready"/></header><dl class="admin-defaults">{[['Champion',completion?.placements.champion],['Runner-up',completion?.placements.runnerUp],['Third Place',completion?.placements.third]].filter(([,id])=>id).map(([label,id])=><div><dt>{label}</dt><dd>{placementName(id)}</dd></div>)}</dl>{state.tournament.status!=='completed'&&!completion?.historical&&<><button class="admin-button" type="button" data-open-completion>Complete Tournament</button><dialog class="admin-dialog" data-completion-dialog aria-labelledby="confirm-completion-title"><header class="admin-heading"><h2 id="confirm-completion-title">Complete Tournament</h2><button type="button" class="admin-ghost" data-close-completion>Close</button></header><p>Confirm final results and details. Normal tournament operations become read-only.</p><form method="post" action={`${base}?action=complete`} class="admin-form" data-pending-form><input type="hidden" name="intent" value="complete-tournament"/><input type="hidden" name="revision" value={completion.revision}/><input type="hidden" name="confirmed" value="yes"/><div class="admin-actions"><button type="button" class="admin-ghost" data-close-completion>Cancel</button><button type="submit" class="admin-button">Confirm Completion</button></div><p class="admin-submit-status" role="status"></p></form></dialog></>}</section>:setup.state.matches>0?<section class="detail-section"><h2>Completion pending</h2><ul>{completion?.issues.map(issue=><li>{issue}</li>)}</ul>{completion?.issues.some(issue=>/Details/.test(issue))&&<a href={`${base}/matches`}>Complete Match Details</a>}</section>:<div class="admin-actions">{state.participants.length<Math.max(2,Number(values.bracket_size)/2)?<a class="admin-button" href={`${base}/participants`}>Complete Participants</a>:!state.roster.ready?<a class="admin-button" href={`${base}/roster`}>Complete Roster</a>:<a class="admin-button" href={`${base}/bracket`}>Draw Bracket</a>}</div>}
+ {Astro.url.searchParams.has('saved')&&<p role="status">{Astro.url.searchParams.get('saved')==='completed'?'Tournament completed.':'Setup saved.'}</p>}
+ {setup.locked?<p class="admin-help">{state.tournament.status==='completed'?'Tournament operations are read-only. Existing detail corrections require a reason and retain audit history.':'Setup is read-only after official draw.'}</p>:<details class="detail-section"><summary>Edit Setup</summary><form method="post" class="admin-form" data-pending-form>
+ {['revision','stage_id','stage_name','format','series_type','final_map_rule'].map(key=><input type="hidden" name={key} value={values[key]}/>)}
+ <div class="setup-grid"><label>Bracket Size<select name="bracket_size">{[4,8,16,32,64].map(size=><option value={size} selected={values.bracket_size===String(size)}>{size}</option>)}</select></label>{[['map_count','Maps per Match',15],['action_seconds','Action Time (seconds)',300],['reserve_seconds','Reserve Time (seconds)',3600]].map(([key,label,max])=><label>{label}<input type="number" name={key} value={values[key]} min="1" max={max} step={key==='map_count'?2:1} required/></label>)}</div>
+ <label class="admin-confirm"><input type="checkbox" name="bronze_match" value="1" checked={values.bronze_match==='1'}/>Include Bronze Match</label><button type="submit" class="admin-button">Save Setup</button><p class="admin-submit-status" role="status"></p>
+ </form></details>}
+ </>}
 </AdminLayout>
+<script>
+ const dialog=document.querySelector<HTMLDialogElement>('[data-completion-dialog]');
+ document.querySelector('[data-open-completion]')?.addEventListener('click',()=>dialog?.showModal());
+ document.querySelectorAll('[data-close-completion]').forEach(button=>button.addEventListener('click',()=>dialog?.close()));
+</script>

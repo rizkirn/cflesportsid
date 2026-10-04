@@ -1,0 +1,74 @@
+---
+import {playedMapStatus} from '../../admin/map-assignments.mjs';
+import { readCorrectionHistory } from '../../admin/corrections.mjs';
+import Status from './StatusBadge.astro';
+const { db, state, live, match, submitted, message } = Astro.props;
+const data=JSON.parse(live.snapshot);
+const name=(id)=>state.participants.find(team=>team.id===id)?.name??id??'TBD';
+let history=[];let historyUnavailable=false;
+try {history=await readCorrectionHistory(db,state.tournament.id,match.id);}catch(error){if(!/no such table.*match_correction_audit/.test(String(error?.message)))throw error;historyUnavailable=true;}
+const confirmed=match.status==='completed'||!!match.winner_id;
+const editable=!live.historical&&state.tournament.status!=='completed'&&!data.tournament?.[1]&&match.team1_id&&match.team2_id&&(!confirmed||!historyUnavailable);
+const targets=data.sources.filter(source=>source[3]===match.id).map(source=>({source,match:live.matches.find(row=>row.id===source[0])}));
+const blocked=(row)=>!row||row.status!=='upcoming'||row.winner_id||row.score1!==0||row.score2!==0||row.result_type==='walkover'||row.detail_maps||row.detail_entries||row.detail_rounds||row.detail_status;
+const mapCount=match.map_count;
+const maps=await playedMapStatus(db,state.tournament.id,match);
+const editing=!confirmed||Boolean(submitted)||Astro.url.searchParams.get('edit')==='result';
+const detailHref=`/admin/tournaments/${state.tournament.id}/matches/${match.id}`;
+const editHref=`${Astro.url.pathname}?match=${encodeURIComponent(match.id)}&edit=result`;
+const detailsLabel=match.detail_status==='complete'?'View Match Details':'Enter Match Details';
+const resultHistory=history.filter(entry=>entry.correction_type!=='details');
+---
+<dialog class="admin-dialog" data-result-dialog aria-labelledby="result-inspector-title">
+  <header class="admin-heading"><h2 id="result-inspector-title">{match.round_name} · Match {match.bracket_slot}</h2><a href={Astro.url.pathname}>Close</a></header>
+  <p class="result-teams">{name(match.team1_id)} <span class="admin-meta">vs</span> {name(match.team2_id)}</p><div class="result-summary"><strong>{match.result_type==='walkover'?'Full-match W/O':`${match.score1}-${match.score2}`}</strong><Status label={confirmed?'Confirmed result':match.status==='live'?'Live':'Upcoming'} tone={confirmed?'ready':'info'}/></div>
+  {message&&<p class="admin-error" role="alert">{message}</p>}
+  {historyUnavailable&&<p class="admin-help">Confirmed-result editing is unavailable.</p>}
+  {confirmed&&!editing&&<div class="admin-actions">
+    {match.result_type!=='walkover'&&<>
+      <a class="admin-button" href={detailHref}>{detailsLabel}</a>
+    </>}
+    {editable&&<a href={editHref}>Edit Result</a>}
+  </div>}
+  {editable&&editing?<form method="post" class="admin-form result-editor-form" data-pending-form data-result-editor data-map-count={mapCount} data-old-score={match.result_type==='walkover'?`W/O · Winner: ${name(match.winner_id)}`:`${match.score1}-${match.score2}`} data-confirmed={String(confirmed)} data-maps-assigned={String(maps.assigned)}>
+    <input type="hidden" name="intent" value="edit-result"/><input type="hidden" name="match_id" value={match.id}/><input type="hidden" name="result_revision" value={submitted?.result_revision??live.revision}/>
+    <label>Result type<select name="result_type"><option value="played" selected={(submitted?.result_type??match.result_type)==='played'}>Played · Fixed {mapCount} Maps</option><option value="walkover" selected={(submitted?.result_type??match.result_type)==='walkover'}>Full-match W/O</option></select></label>
+    <div data-result-fields="played">{!maps.assigned&&<p class="admin-error">{maps.message} <a href={maps.href}>{maps.label}</a></p>}<div class="admin-dates">{[1,2].map(side=><label>{name(match[`team${side}_id`])}<input name={`score${side}`} type="number" min="0" max={mapCount} step="1" required value={submitted?.[`score${side}`]??match[`score${side}`]}/></label>)}</div></div>
+    <div data-result-fields="walkover"><label>W/O winner<select name="walkover_winner" required><option value="">Select winner</option>{[match.team1_id,match.team2_id].map(id=><option value={id} selected={(submitted?.walkover_winner??match.winner_id)===id}>{name(id)}</option>)}</select></label>{!confirmed&&(match.detail_maps||match.detail_entries||match.detail_rounds||match.detail_status)&&<p class="admin-help">Existing details prevent an initial full-match W/O.</p>}</div>
+    {confirmed&&<><label>Correction reason<input name="reason" value={submitted?.reason??''} maxlength="1000" required/></label><p class="admin-help">Changed results may require detail reconciliation.</p></>}
+    {targets.length>0&&<section data-progression data-old-winner={match.winner_id} data-team1={match.team1_id} data-team2={match.team2_id}>{targets.map(({source,match:target})=><div><p><span data-progression-side={source[2]}>{source[2]==='loser'?'Loser':'Winner'}</span>{source[2]==='loser'?' enters ':' advances to '}<a href={`${Astro.url.pathname}?match=${encodeURIComponent(source[0])}`}>{target?.round_name??source[0]}</a>.</p>{confirmed&&<p data-correction-impact hidden>Match {target?.bracket_slot}{blocked(target)?' · Winner change blocked: match has started or has saved details/result.':''}</p>}</div>)}</section>}
+    <input type="hidden" name="confirmed" value="yes"/><div class="admin-actions"><a class="admin-ghost" href={Astro.url.pathname}>Cancel</a><button type="button" class="admin-button" data-preview-result>Save Result</button></div><p class="admin-submit-status" role="status"></p>
+  </form>:!confirmed&&<p class="admin-help">{!match.team1_id||!match.team2_id?'Waiting for feeder results.':'Result is read-only.'}</p>}
+  {resultHistory.length>0&&<details class="detail-section"><summary>Result History ({resultHistory.length})</summary><ol>{resultHistory.map(entry=><li><time datetime={entry.created_at}>{new Date(entry.created_at).toLocaleString('en-GB',{timeZone:'Asia/Jakarta'})}</time><p>Result correction · {entry.reason}</p></li>)}</ol></details>}
+</dialog>
+<dialog class="admin-dialog" data-result-confirmation aria-labelledby="confirmation-title"><h2 id="confirmation-title">Confirm Result</h2><p data-confirmation-summary></p><section data-confirmation-impact></section><div class="admin-actions"><button type="button" class="admin-outline" data-back-result>Back</button><button type="button" class="admin-button" data-confirm-result>Confirm Result</button></div></dialog>
+<script>
+  const dialog=document.querySelector<HTMLDialogElement>('[data-result-dialog]');dialog?.showModal();dialog?.addEventListener('cancel',()=>window.location.assign(window.location.pathname));
+  document.querySelectorAll<HTMLFormElement>('[data-result-editor]').forEach(form=>{
+    const type=form.querySelector<HTMLSelectElement>('[name="result_type"]');
+    const update=()=>{
+      const save=form.querySelector<HTMLButtonElement>('[data-preview-result]');
+      if(save)save.disabled=type?.value==='played'&&form.dataset.mapsAssigned!=='true';
+      form.querySelectorAll<HTMLElement>('[data-result-fields]').forEach(group=>{
+        group.hidden=group.dataset.resultFields!==type?.value;
+        group.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select').forEach(field=>field.disabled=group.hidden);
+      });
+    };
+    const updateImpact=()=>{const impact=form.querySelector<HTMLElement>('[data-progression]');if(!impact)return;const a=Number(form.querySelector<HTMLInputElement>('[name=score1]')?.value);const b=Number(form.querySelector<HTMLInputElement>('[name=score2]')?.value);const winner=type?.value==='walkover'?form.querySelector<HTMLSelectElement>('[name=walkover_winner]')?.value:a===b?'':a>b?impact.dataset.team1:impact.dataset.team2;impact.querySelectorAll<HTMLElement>('[data-correction-impact]').forEach(detail=>detail.hidden=!winner||winner===impact.dataset.oldWinner);
+      impact.querySelectorAll<HTMLElement>('[data-progression-side]').forEach(label=>{const id=winner?(label.dataset.progressionSide==='loser'?(winner===impact.dataset.team1?impact.dataset.team2:impact.dataset.team1):winner):'';const field=id?form.querySelector<HTMLInputElement>(`[name=score${id===impact.dataset.team1?1:2}]`):null;label.textContent=field?.parentElement?.firstChild?.textContent?.trim()||(label.dataset.progressionSide==='loser'?'Loser':'Winner');});
+    };
+    type?.addEventListener('change',update);form.addEventListener('input',updateImpact);form.addEventListener('change',updateImpact);update();updateImpact();
+    const confirmation=document.querySelector<HTMLDialogElement>('[data-result-confirmation]');
+    form.querySelector('[data-preview-result]')?.addEventListener('click',()=>{
+      if(!form.reportValidity())return;
+      const fields=new FormData(form);const a=Number(fields.get('score1'));const b=Number(fields.get('score2'));const wo=fields.get('result_type')==='walkover';
+      const count=Number(form.dataset.mapCount);if(!wo&&(!Number.isSafeInteger(a)||!Number.isSafeInteger(b)||a+b!==count||a===b)){const status=form.querySelector('.admin-submit-status');if(status)status.textContent=count===3?'All three maps must be decided: 3-0, 2-1, 1-2 or 0-3.':`All ${count} maps must be decided.`;return;}
+      const winner=wo?form.querySelector<HTMLSelectElement>('[name=walkover_winner]')!.selectedOptions[0].text:form.querySelector<HTMLInputElement>(`[name=score${a>b?1:2}]`)!.parentElement!.textContent;
+      const summary=confirmation?.querySelector('[data-confirmation-summary]');if(summary)summary.textContent=`${form.dataset.confirmed==='true'?`${form.dataset.oldScore} → `:''}${wo?'Full-match W/O':`${a}-${b}`} · Winner: ${winner}`;
+      const impact=confirmation?.querySelector('[data-confirmation-impact]');const source=form.querySelector('section');if(impact){if(source)impact.replaceChildren(source.cloneNode(true));else impact.textContent='No downstream match.';}
+      confirmation?.showModal();
+    });
+    document.querySelector('[data-back-result]')?.addEventListener('click',()=>confirmation?.close());
+    document.querySelector('[data-confirm-result]')?.addEventListener('click',()=>{confirmation?.close();form.requestSubmit();});
+  });
+</script>

@@ -1,0 +1,92 @@
+---
+export const prerender=false;
+import {env} from 'cloudflare:workers';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Status from '../../../../components/admin/StatusBadge.astro';
+import Randomizer from '../../../../components/tools/MapRandomizerTool.astro';
+import Veto from '../../../../components/tools/VetoTool.astro';
+import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {readParticipantState} from '../../../../admin/participants.mjs';
+import {readMapContext,readMapConfirmation,confirmMaps,assignmentsAvailable} from '../../../../admin/map-assignments.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const id=Astro.params.id!;
+let target={roundId:Astro.url.searchParams.get('round')??undefined,matchId:Astro.url.searchParams.get('match')??undefined};
+let context;let workspace;let rounds=[];let matches=[];let assignments=[];let message='';let early=[];
+const late=(round)=>['semi-final','bronze','final'].includes(round.id)||round.placement!==null;
+try {
+ workspace=await readParticipantState(db,id);
+ rounds=(await db.prepare('SELECT * FROM tournament_rounds WHERE tournament_id=? ORDER BY sort_order').bind(id).all()).results;
+ early=rounds.filter(round=>!late(round));
+ matches=(await db.prepare('SELECT m.*,a.name AS team1_name,b.name AS team2_name FROM matches m LEFT JOIN teams a ON a.id=m.team1_id LEFT JOIN teams b ON b.id=m.team2_id WHERE tournament_id=? ORDER BY round_id,bracket_slot').bind(id).all()).results;
+ if(await assignmentsAvailable(db))assignments=(await db.prepare('SELECT * FROM official_map_assignments WHERE tournament_id=?').bind(id).all()).results;
+ if(target.roundId||target.matchId){
+  context=await readMapContext(db,id,target);
+  if(Astro.request.method==='POST'){
+   await confirmMaps(db,id,target,await readMapConfirmation(Astro.request));
+   if(context.source==='randomizer'){
+    const index=early.findIndex(round=>round.id===context.round.id);
+    const next=early.slice(index+1).find(round=>!assignments.some(a=>a.scope==='round'&&a.round_id===round.id));
+    return Astro.redirect(next?`${Astro.url.pathname}?round=${next.id}`:`${Astro.url.pathname}?tm=complete`,303);
+   }
+   return Astro.redirect(`${Astro.url.pathname}?saved=1`,303);
+  }
+ }
+}catch(error){message=error instanceof AdminError?error.message:'Could not load official maps.';Astro.response.status=error instanceof AdminError?error.status:503;}
+const complete=early.every(round=>assignments.some(a=>a.scope==='round'&&a.round_id===round.id));
+const nextRound=context?.source==='randomizer'&&early.slice(early.findIndex(round=>round.id===context.round.id)+1).some(round=>!assignments.some(a=>a.scope==='round'&&a.round_id===round.id));
+const redo=Astro.url.searchParams.get('redo')==='1';
+const targetQuery=context?.matchId?`match=${context.matchId}`:`round=${context?.round.id}`;
+const toolName=context?.source==='veto'?'Veto':'Randomizer';
+const overview=[];
+if(!context&&!message&&!['clash-for-glory-s1','clash-for-glory-s2'].includes(id)){
+ try{
+ for(const round of early)overview.push(await readMapContext(db,id,{roundId:round.id}));
+ for(const round of rounds.filter(late))for(const match of matches.filter(match=>match.round_id===round.id))overview.push(await readMapContext(db,id,{matchId:match.id}));
+ }catch(error){message=error instanceof AdminError?error.message:'Could not load official maps.';Astro.response.status=error instanceof AdminError?error.status:503;overview.length=0;}
+}
+---
+<AdminLayout title="Official Maps" workspace={workspace}>
+ <header class="admin-heading"><h1>Official Maps</h1>{workspace?.locked?<a href={`/admin/tournaments/${id}/bracket`}>Back to Bracket</a>:complete&&<a class="admin-button" href={`/admin/tournaments/${id}/bracket`}>Continue to Bracket</a>}</header>
+ {message&&<p class="admin-error" role="alert">{message}</p>}
+ {Astro.url.searchParams.has('saved')&&<p role="status">Official maps saved.</p>}
+ {early.length>0&&<><h2>Technical Meeting</h2><nav class="round-navigation" aria-label="Randomizer rounds">{early.map(round=><a href={`?round=${round.id}`} aria-current={context?.round.id===round.id?'step':undefined}>{round.name}<Status label={context?.round.id===round.id?'Current':assignments.some(a=>a.scope==='round'&&a.round_id===round.id)?'Confirmed':'Pending'} tone={assignments.some(a=>a.scope==='round'&&a.round_id===round.id)?'ready':'pending'}/></a>)}</nav></>}
+ {!context&&complete&&!message&&early.length>0&&<p role="status">All Technical Meeting maps confirmed.</p>}
+ {context&&<>
+ <a href={Astro.url.pathname}>Back to Maps</a>
+ <h2>{context.round.name}{context.matchId&&` · ${context.teams.find(team=>team.id===context.round.team1_id)?.name??'TBD'} vs ${context.teams.find(team=>team.id===context.round.team2_id)?.name??'TBD'}`}</h2>
+ {context.assignment&&<section aria-label="Confirmed maps"><Status label="Confirmed" tone="ready"/><ol class="official-map-list">{context.assignment.map((map,index)=><li><span>Map {index+1}</span><strong>{context.pool.find(item=>item.id===map)?.name??map}</strong></li>)}</ol>
+ {context.assignmentActions.length>0&&<><h3>Veto History</h3><table class="admin-table operational-table"><thead><tr><th>Team</th><th>Action</th><th>Map</th></tr></thead><tbody>{context.assignmentActions.map(action=><tr><td data-label="Team">{context.teams.find(team=>team.id===(action.team==='A'?context.round.team1_id:context.round.team2_id))?.name??action.team}</td><td data-label="Action">{action.action==='ban'?'Ban':'Pick'}{action.automatic?' · Automatic':''}</td><td data-label="Map">{action.voided?'Skipped':context.pool.find(map=>map.id===action.map)?.name??action.map}</td></tr>)}</tbody></table></>}
+ {!context.locked&&!redo&&<button class="admin-outline" type="button" data-redo={toolName} data-redo-url={`?${targetQuery}&redo=1`}>Redo {toolName}</button>}
+ </section>}
+ {context.locked?<p>Maps are locked after play or detail entry starts.</p>:context.assignment&&!redo?null:context.matchId&&context.teams.length!==2?<p>Waiting for both teams. Confirm feeder results first.</p>:<>
+ {redo&&context.assignment&&<p>Current official maps remain active until confirmation. <a href={`?${targetQuery}`}>Cancel Redo</a></p>}
+ {context.source==='veto'?<Veto official={context}/>:<Randomizer official={context}/>}
+ <form method="post" class="admin-form" data-pending-form data-confirm-maps>
+ <input type="hidden" name="revision" value={context.revision}/><input type="hidden" name="maps" value=""/><input type="hidden" name="actions" value="[]"/><input type="hidden" name="confirmed" value="yes"/>
+ <button class="admin-button" type="submit" disabled>{context.source==='veto'?'Confirm Veto':nextRound?'Confirm & Next':'Confirm Maps'}</button><p class="admin-submit-status" role="status"></p>
+ </form>
+ </>}
+ </>}
+ {!context&&overview.map(item=><section class="map-assignment-row"><div class="map-assignment-content"><h2>{item.round.name}{item.matchId&&` · Match ${matches.find(match=>match.id===item.matchId)?.bracket_slot}`}</h2>
+ {item.matchId&&<p>{item.teams.find(team=>team.id===item.round.team1_id)?.name??'TBD'} vs {item.teams.find(team=>team.id===item.round.team2_id)?.name??'TBD'}</p>}
+ {item.assignment?<ol class="official-map-list">{item.assignment.map((map,index)=><li><span>Map {index+1}</span><strong>{item.pool.find(entry=>entry.id===map)?.name??map}</strong></li>)}</ol>:<p class="admin-meta">Maps not assigned</p>}</div>
+ <div class="map-assignment-actions"><Status label={item.assignment?'Confirmed':item.matchId&&item.teams.length!==2?'Waiting for teams':'Pending'} tone={item.assignment?'ready':'pending'}/><div class="admin-actions"><a class={item.assignment?'admin-outline':'admin-button'} href={item.matchId?`?match=${item.matchId}`:`?round=${item.round.id}`}>{item.assignment?item.source==='veto'?'View Veto':'View Randomizer Result':item.source==='veto'?'Open Veto':'Open Randomizer'}</a>
+ {item.assignment&&!item.locked&&<button class="admin-ghost" type="button" data-redo={item.source==='veto'?'Veto':'Randomizer'} data-redo-url={`${item.matchId?`?match=${item.matchId}`:`?round=${item.round.id}`}&redo=1`}>Redo {item.source==='veto'?'Veto':'Randomizer'}</button>}</div></div></section>)}
+ {!matches.length&&rounds.some(late)&&<p>Match Veto becomes available after the bracket draw.</p>}
+ <dialog class="admin-dialog" data-redo-dialog aria-labelledby="redo-title"><h2 id="redo-title">Redo the confirmed maps?</h2><p>The current official maps will remain active until a new result is completed and confirmed.</p><div class="admin-actions"><button class="admin-outline" type="button" data-redo-cancel>Cancel</button><a class="admin-button" data-redo-confirm href={Astro.url.pathname}>Redo</a></div></dialog>
+</AdminLayout>
+<script>
+ const dialog=document.querySelector<HTMLDialogElement>('[data-redo-dialog]')!;
+ document.querySelectorAll<HTMLButtonElement>('[data-redo]').forEach(button=>button.addEventListener('click',()=>{
+ dialog.querySelector('h2')!.textContent=`Redo the confirmed ${button.dataset.redo?.toLowerCase()}?`;
+ const link=dialog.querySelector<HTMLAnchorElement>('[data-redo-confirm]')!;link.href=button.dataset.redoUrl!;link.textContent=`Redo ${button.dataset.redo}`;dialog.showModal();
+ }));
+ dialog.querySelector('[data-redo-cancel]')!.addEventListener('click',()=>dialog.close());
+ document.addEventListener('cfl-map-preview',(event:CustomEvent)=>{
+ const form=document.querySelector<HTMLFormElement>('[data-confirm-maps]');if(!form)return;
+ const data=event.detail;const button=form.querySelector<HTMLButtonElement>('button[type=submit]')!;
+ const valid=Array.isArray(data.maps)&&data.maps.length===3&&data.maps.every(map=>typeof map==='string')&&new Set(data.maps).size===3;
+ button.disabled=!valid;form.querySelector<HTMLInputElement>('[name=maps]')!.value=valid?JSON.stringify(data.maps):'';
+ form.querySelector<HTMLInputElement>('[name=actions]')!.value=JSON.stringify(data.actions??[]);
+ });
+</script>

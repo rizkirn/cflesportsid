@@ -1,58 +1,37 @@
 ---
-export const prerender = false;
-import { env } from 'cloudflare:workers';
+export const prerender=false;
+import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import { AdminError, createTournament, readCreateForm, requireLocalAdmin } from '../../../admin/tournaments.mjs';
-const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let errorMessage = ''; let values = { name: '', start_date: '', end_date: '' };
-if (Astro.request.method === 'POST') {
-  try {
-    const input = await readCreateForm(Astro.request);
-    values = { name: input.name ?? '', start_date: input.start_date ?? '', end_date: input.end_date ?? '' };
-    const id = await createTournament(db, input);
-    return Astro.redirect(`/admin/tournaments/${id}/setup`, 303);
-  } catch (error) {
-    if (error instanceof AdminError) { errorMessage = error.message; Astro.response.status = error.status; }
-    else { console.error('[admin] Tournament creation failed', error); errorMessage = 'Could not create the tournament. Check staging and try again.'; Astro.response.status = 503; }
-  }
-}
+import {AdminError,createTournamentWithSetup,readCreateForm,requireLocalAdmin} from '../../../admin/tournaments.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let message='';let values:Record<string,string>={name:'',start_date:'',end_date:'',is_test:'0',bracket_size:'16',map_count:'3',action_seconds:'20',reserve_seconds:'90',bronze_match:'1'};
+if(Astro.request.method==='POST')try{
+  values=await readCreateForm(Astro.request);
+  const id=await createTournamentWithSetup(db,values);
+  return Astro.redirect(`/admin/tournaments/${id}`,303);
+}catch(error){message=error instanceof AdminError?error.message:'Could not create tournament. Try again.';Astro.response.status=error instanceof AdminError?error.status:503;}
 ---
 <AdminLayout title="Create Tournament">
-  <header class="admin-heading"><div><h1>Create Tournament</h1><p>Start with a name and confirmed dates.</p></div></header>
-  <form method="post" action="/admin/tournaments/new" class="admin-form">
-    {errorMessage && <p role="alert" class="admin-error">{errorMessage}</p>}
-    <label for="name">Tournament name</label><input id="name" name="name" value={values.name} minlength="3" maxlength="120" required aria-describedby="name-help" />
-    <p id="name-help" class="admin-help">The name determines the tournament URL. Use a distinct name for each season.</p>
-    <div class="admin-dates"><div><label for="start_date">Start date</label><input type="date" id="start_date" name="start_date" value={values.start_date} required /></div><div><label for="end_date">End date</label><input type="date" id="end_date" name="end_date" value={values.end_date} required /></div></div>
-    <p class="admin-help">Both dates are required. Enter the confirmed schedule.</p>
-    <dl class="admin-defaults"><div><dt>Game</dt><dd>Crossfire: Legends</dd></div><div><dt>Region</dt><dd>ID</dd></div><div><dt>Format</dt><dd>Single elimination</dd></div><div><dt>Status</dt><dd>Upcoming</dd></div></dl>
-    <div class="admin-actions"><button type="submit" class="admin-button">Create Tournament</button><a href="/admin">Cancel</a></div>
-    <p class="admin-submit-status admin-help" role="status" aria-live="polite" aria-atomic="true"></p>
-  </form>
+  <h1>Tournaments</h1><a href="/admin/tournaments">Back to tournaments</a>
+  <dialog class="admin-dialog" aria-labelledby="create-title" data-create-dialog>
+    <header class="admin-heading"><h2 id="create-title">Create Tournament</h2><button type="button" class="admin-outline" data-close-dialog>Close</button></header>
+    <form method="post" class="admin-form" data-pending-form>
+      {message&&<p role="alert" class="admin-error">{message}</p>}
+      <label>Name<input name="name" value={values.name} minlength="3" maxlength="120" required autofocus/></label>
+      <div class="setup-grid"><label>Start Date<input type="date" name="start_date" value={values.start_date} required/></label><label>End Date<input type="date" name="end_date" value={values.end_date} required/></label>
+      <label>Type<select name="is_test"><option value="0" selected={values.is_test==='0'}>Official</option><option value="1" selected={values.is_test==='1'}>Test</option></select></label>
+      <label>Bracket Size<select name="bracket_size">{[4,8,16,32,64].map(size=><option value={size} selected={values.bracket_size===String(size)}>{size}</option>)}</select></label>
+      <label>Maps per Match<input type="number" name="map_count" min="1" max="15" step="2" value={values.map_count} required/></label>
+      <label>Action Time (seconds)<input type="number" name="action_seconds" min="1" max="300" value={values.action_seconds} required/></label>
+      <label>Reserve Time (seconds)<input type="number" name="reserve_seconds" min="1" max="3600" value={values.reserve_seconds} required/></label></div>
+      <label class="admin-confirm"><input type="checkbox" name="bronze_match" value="1" checked={values.bronze_match==='1'}/>Include Bronze Match</label>
+      <div class="admin-actions"><button class="admin-button" type="submit">Create Tournament</button><button class="admin-outline" type="button" data-close-dialog>Cancel</button></div><p class="admin-submit-status" role="status"></p>
+    </form>
+  </dialog>
 </AdminLayout>
-
 <script>
-  const form = document.querySelector<HTMLFormElement>('.admin-form');
-  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
-  const status = form?.querySelector<HTMLElement>('.admin-submit-status');
-  if (form && button && status) {
-    let submitting = false;
-    const reset = () => {
-      submitting = false;
-      button.disabled = false;
-      button.removeAttribute('aria-busy');
-      button.textContent = 'Create Tournament';
-      status.textContent = '';
-    };
-    form.addEventListener('submit', event => {
-      if (event.defaultPrevented) return;
-      if (submitting) { event.preventDefault(); return; }
-      submitting = true;
-      button.disabled = true;
-      button.setAttribute('aria-busy', 'true');
-      button.textContent = 'Creating Tournament...';
-      status.textContent = 'Saving the tournament. Please wait.';
-    });
-    window.addEventListener('pageshow', reset);
-  }
+  const dialog=document.querySelector<HTMLDialogElement>('[data-create-dialog]');
+  dialog?.showModal();
+  dialog?.addEventListener('close',()=>window.location.assign('/admin/tournaments'));
+  document.querySelectorAll('[data-close-dialog]').forEach(button=>button.addEventListener('click',()=>dialog?.close()));
 </script>

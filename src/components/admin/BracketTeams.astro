@@ -1,0 +1,4 @@
+---
+const {match,teams,source}=Astro.props;
+---
+{[1,2].map(side=>{const entry=teams.find(team=>team.id===match[`team${side}_id`]);const winner=!!entry&&match.winner_id===entry.id;return <span class:list={['operations-team',{winner,loser:!!match.winner_id&&!winner}]} style={`--team-color:${entry?.color??'#777B82'}`}><span class="operations-team-name">{entry&&<img src={entry.logo||`/logos/${entry.tag}.webp`} width="24" height="24" alt="" onerror="this.onerror=null;this.src='/logos/default.webp'"/>}{entry?.name??source(match,side)}</span><b>{match.result_type==='walkover'?winner?'W/O':'':match.status==='completed'||match.status==='live'?match[`score${side}`]:'–'}</b></span>;})}

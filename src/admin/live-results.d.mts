@@ -7,6 +7,7 @@ export interface LiveMatch {
   round_name:string; sort_order:number; series_type:string; map_count:number; detail_maps:number; detail_entries:number; detail_rounds:number; detail_status:'draft'|'complete'|null;
 }
 export interface LiveResults { snapshot:string; revision:string; matches:LiveMatch[]; historical:boolean; }
+export const resultSnapshotSQL:string;
 export function readLiveResults(db:D1Database,id:string):Promise<LiveResults>;
 export function seriesWinner(score1:number,score2:number,type:string,count:number):1|2|null;
 export function saveLiveResult(db:D1Database,id:string,form:BracketForm):Promise<void>;

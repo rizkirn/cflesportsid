@@ -6,7 +6,7 @@ export interface SetupForm {
   rounds: RoundForm[]; revision: string; bronze_match?: string; intent?: string; remove_round?: string;
 }
 export interface Setup {
-  tournament: { id: string; name: string; status: string }; revision: string; snapshot: string; locked: boolean;
+  tournament: { id: string; name: string; status: string; is_test?: number }; revision: string; snapshot: string; locked: boolean;
   state: { stages: [string, string, string, number, string, number, string | null, number | null, number | null][];
     rounds: [string, string, string, number, number | null][]; status: string; matches: number; byes: number; participants: string[] };
 }

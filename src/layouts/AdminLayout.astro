@@ -1,6 +1,7 @@
 ---
 import Layout from './Layout.astro';
 import '../styles/admin.css';
+import Status from '../components/admin/StatusBadge.astro';
 import type { ParticipantState } from '../admin/participants.mjs';
 import { rosterReadiness } from '../admin/roster-snapshot.mjs';
 interface Props { title: string; workspace?: ParticipantState | null; }
@@ -10,19 +11,24 @@ const roster = workspace ? rosterReadiness(workspace.participants, savedState.ro
 const base = workspace ? `/admin/tournaments/${workspace.tournament.id}` : '';
 const sections = workspace ? [
   ['Overview','',workspace.tournament.status],
-  ['Setup','/setup',workspace.locked ? 'Read-only' : workspace.ready ? `${workspace.stage?.[3]} slots` : 'Required'],
   ['Participants','/participants',`${workspace.participants.length} teams${workspace.locked ? ' · Read-only' : ''}`],
   ['Roster','/roster',`${roster?.teams.filter(team => team.ready).length} / ${workspace.participants.length} ready${workspace.locked ? ' · Read-only' : ''}`],
-  ['Bracket','/bracket',workspace.locked ? 'Saved bracket' : roster?.ready ? 'Ready to draw' : 'Needs rosters'],
-  ['Matches','/matches',workspace.locked ? 'View matches' : 'Awaiting bracket'],
+  ['Maps','/maps','Official round and match maps'],
+  ['Bracket','/bracket','Tournament bracket and results'],
+  ['Matches','/matches','Tournament match details'],
 ] : [];
 ---
-<Layout title={`${title} | CFL Esports ID Admin`} noindex>
-  <div class="container admin-page">
-    <nav class="admin-nav" aria-label="Admin"><a href="/admin">Tournaments</a><span>Local admin · Staging</span></nav>
-    <div class:list={['admin-workspace', {'has-workspace': !!workspace}]}>
-      {workspace && <aside class="tournament-sidebar"><p>{workspace.tournament.name}</p><nav aria-label="Tournament workspace">{sections.map(([label,path,status]) => <a href={`${base}${path}`} aria-current={Astro.url.pathname.replace(/\/$/,'') === `${base}${path}` ? 'page' : undefined}><strong>{label}</strong><small>{status}</small></a>)}</nav></aside>}
-      <div class="tournament-content"><slot /></div>
+<Layout title={`${title} | CFL Esports ID Admin`} noindex admin>
+  <div class="admin-page admin-shell">
+    <aside class="admin-global"><a href="/admin" class="admin-brand"><span>CFL</span> Operations</a><span class="admin-help">Local admin · Staging</span><details class="admin-menu" open><summary>Admin Menu</summary><nav aria-label="Admin">
+      <a href="/admin" aria-current={Astro.url.pathname==='/admin'?'page':undefined}>Overview</a>
+      <a href="/admin/tournaments" aria-current={Astro.url.pathname.startsWith('/admin/tournaments')?'page':undefined}>Tournaments</a>
+      <h2>Database</h2>{['Teams','Players','Maps'].map(label=><a href={`/admin/${label.toLowerCase()}`} aria-current={Astro.url.pathname===`/admin/${label.toLowerCase()}`?'page':undefined}>{label}</a>)}
+    </nav></details></aside>
+    <div class="tournament-content" id="admin-content">
+      {workspace&&<header class="tournament-context"><a href="/admin/tournaments">Tournaments</a><span aria-hidden="true">/</span><strong>{workspace.tournament.name}</strong>{workspace.tournament.is_test===1&&<span class="test-badge">TEST</span>}<Status label={workspace.tournament.status==='upcoming'?'Upcoming':workspace.tournament.status==='ongoing'?'Ongoing':'Completed'} tone={workspace.tournament.status==='completed'?'ready':'info'}/></header>}
+      {workspace && <nav class="tournament-tabs" aria-label="Tournament workspace">{sections.map(([label,path,status]) => <a href={`${base}${path}`} aria-current={Astro.url.pathname.replace(/\/$/,'') === `${base}${path}` || path==='/matches'&&Astro.url.pathname.startsWith(`${base}/matches/`) ? 'page' : undefined} title={status}><strong>{label}</strong></a>)}</nav>}
+      <slot />
     </div>
   </div>
 </Layout>
@@ -39,4 +45,10 @@ const sections = workspace ? [
     });
     window.addEventListener('pageshow', () => { pending = false; form.removeAttribute('aria-busy'); form.querySelectorAll('button[type="submit"]').forEach(button => button.removeAttribute('aria-disabled')); if (status) status.textContent = ''; });
   });
+</script>
+<script>
+  const menu=document.querySelector<HTMLDetailsElement>('.admin-menu');
+  const narrow=window.matchMedia('(max-width:760px)');
+  const updateMenu=()=>{if(menu)menu.open=!narrow.matches;};
+  updateMenu();narrow.addEventListener('change',updateMenu);
 </script>

@@ -1,16 +1,35 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cflesportsid",
-  "main": "@astrojs/cloudflare/entrypoints/server",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": { "binding": "ASSETS", "directory": "./dist/client" },
-  "compatibility_date": "2026-09-30",
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "cflesportsid",
-      "database_id": "local-placeholder",
-      "migrations_dir": "migrations"
-    }
-  ]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cflesportsid",
+	"main": "@astrojs/cloudflare/entrypoints/server",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": "./dist/client"
+	},
+	"compatibility_date": "2026-09-30",
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "cflesportsid",
+			"database_id": "efded3c4-1cf9-46a9-823e-d0f2d17c683a",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "cflesportsid_staging",
+			"database_name": "cflesportsid-staging",
+			"database_id": "4ba57de7-5fda-4703-a956-b1936546986a"
+		}
+	],
+	"previews": {
+		"d1_databases": [
+			{
+				"binding": "DB",
+				"database_name": "cflesportsid-staging",
+        "database_id": "4ba57de7-5fda-4703-a956-b1936546986a"
+			}
+		]
+	}
 }

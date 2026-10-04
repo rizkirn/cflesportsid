@@ -27,12 +27,12 @@ test('Clash for Glory defaults and editable bracket validation match the lifecyc
   assert.deepEqual(v.rounds.map(r=>[r.name,r.placement]), [['Top 16',null],['Quarter Final',null],['Semi Final',null],['Bronze Match',3],['Final',1]]);
   for (const patch of [{ bracket_size:'15' },{map_count:'2'},{action_seconds:'0'},{reserve_seconds:'Infinity'},{format:'double-elimination'},{series_type:'best-of'},{final_map_rule:'pick'},{stage_name:'Bad\nName'}]) assert.throws(()=>validateSetup({...structuredClone(cfgTemplate),...patch}));
   const tampered=structuredClone(cfgTemplate); tampered.rounds=[{id:'fake',name:'Fake',sort_order:'1',placement:'1'}]; assert.deepEqual(validateSetup(tampered).rounds,v.rounds);
-  for (const [size,names] of [[4,['Semi Final','Final']],[8,['Quarter Final','Semi Final','Final']],[16,['Top 16','Quarter Final','Semi Final','Final']],[32,['Top 32','Top 16','Quarter Final','Semi Final','Final']]]) {
+  for (const [size,names] of [[4,['Semi Final','Final']],[8,['Quarter Final','Semi Final','Final']],[16,['Top 16','Quarter Final','Semi Final','Final']],[32,['Top 32','Top 16','Quarter Final','Semi Final','Final']],[64,['Top 64','Top 32','Top 16','Quarter Final','Semi Final','Final']]]) {
     assert.deepEqual(eliminationRounds(size).map(r=>r.name),names);
     assert.equal(validateSetup({...structuredClone(cfgTemplate),bracket_size:String(size),bronze_match:''}).rounds.length,names.length);
     assert.deepEqual(eliminationRounds(size,true).slice(-2).map(r=>r.placement),['3','1']);
   }
-  for (const size of ['2','64','256']) assert.throws(()=>validateSetup({...structuredClone(cfgTemplate),bracket_size:size}));
+  for (const size of ['2','128','256']) assert.throws(()=>validateSetup({...structuredClone(cfgTemplate),bracket_size:size}));
   const smaller=structuredClone(cfgTemplate); smaller.bracket_size='8'; smaller.rounds.shift(); smaller.rounds.forEach((r,i)=>r.sort_order=String(i+1)); assert.equal(validateSetup(smaller).bracket_size,8);
 });
 test('atomic save, reload, stable round IDs and stale-tab protection use the real schema', async () => {

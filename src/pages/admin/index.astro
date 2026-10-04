@@ -1,19 +1,72 @@
 ---
-export const prerender = false;
+export const prerender=false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
-import { listTournaments, requireLocalAdmin } from '../../admin/tournaments.mjs';
-const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let tournaments = []; let unavailable = false;
-try { tournaments = await listTournaments(db); }
-catch (error) { console.error('[admin] Tournament list failed', error); unavailable = true; Astro.response.status = 503; }
+import Status from '../../components/admin/StatusBadge.astro';
+import { listTournaments,requireLocalAdmin } from '../../admin/tournaments.mjs';
+import { readParticipantState } from '../../admin/participants.mjs';
+import { rosterReadiness } from '../../admin/roster-snapshot.mjs';
+import { readLiveResults } from '../../admin/live-results.mjs';
+import { readMapContext,playedMapStatus } from '../../admin/map-assignments.mjs';
+import {readCompletion} from '../../admin/completion.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let tournaments=[];let activity=[];let failed=false;
+try {
+ tournaments=await listTournaments(db);
+ const visible=[...tournaments.filter(row=>row.status!=='completed').slice(0,8),...tournaments.filter(row=>row.status==='completed').slice(0,2)];
+ activity=await Promise.all(visible.map(async tournament=>{
+  const [state,live]=await Promise.all([readParticipantState(db,tournament.id),readLiveResults(db,tournament.id)]);
+  if(!state)throw new Error('Tournament unavailable');
+  const saved=JSON.parse(state.snapshot);const roster=rosterReadiness(state.participants,saved.roster);
+  const base=`/admin/tournaments/${tournament.id}`;
+  const early=saved.setup.rounds.filter(round=>!['semi-final','bronze','final'].includes(round[1])&&round[4]===null);
+  let mapStates=[];
+  const supported=state.ready&&state.stage?.[4]==='fixed-maps'&&state.stage?.[5]===3&&state.stage?.[6]==='random';
+  if(!live.historical&&supported)mapStates=await Promise.all(early.map(round=>readMapContext(db,tournament.id,{roundId:round[1]})));
+  const pendingRound=mapStates.find(round=>!round.assignment&&!round.locked);
+  const pendingDetails=live.matches.filter(match=>match.status==='completed'&&match.result_type!=='walkover'&&match.detail_status!=='complete'&&(match.detail_status==='draft'||!match.detail_maps));
+  const nextMatch=live.matches.find(match=>match.status!=='completed'&&match.team1_id&&match.team2_id);
+  const tasks=[];
+  if(tournament.status!=='completed'&&!live.historical){
+   if(!state.ready)tasks.push({label:'Review tournament setup',detail:'Setup is not ready.',href:base,action:'Open Tournament',kind:'Setup'});
+   else if(state.participants.length<2&&!state.locked)tasks.push({label:'Add participants',detail:`${state.participants.length} teams saved.`,href:base+'/participants',action:'Open Participants',kind:'Participants'});
+   else if(!roster.ready&&!state.locked)tasks.push({label:'Review team rosters',detail:`${roster.teams.filter(team=>!team.ready).length} rosters need attention.`,href:base+'/roster',action:'Open Roster',kind:'Roster'});
+   if(pendingRound)tasks.push({label:`Complete ${pendingRound.round.name} maps`,detail:'Technical Meeting maps not confirmed.',href:base+'/maps?round='+pendingRound.round.id,action:'Open Maps',kind:'Maps'});
+   if(!tasks.length&&!live.matches.length&&state.ready&&roster.ready)tasks.push({label:'Create the official bracket',detail:'Draw has not been confirmed.',href:base+'/bracket',action:'Open Bracket',kind:'Bracket'});
+  }
+  if(pendingDetails.length&&!live.historical&&tournament.status!=='completed')tasks.push({label:`${pendingDetails.length} match ${pendingDetails.length===1?'details entry':'details entries'} pending`,detail:'Confirmed results with unfinished details.',href:`${base}/matches`,action:'Open Matches',kind:'Matches'});
+  if(!tasks.length&&nextMatch&&tournament.status!=='completed'&&!live.historical){
+   const maps=await playedMapStatus(db,tournament.id,nextMatch);
+   tasks.push(maps.assigned?{label:`${nextMatch.round_name} · Match ${nextMatch.bracket_slot}`,detail:'Teams resolved; result not confirmed.',href:base+'/bracket?match='+nextMatch.id,action:'Open Match',kind:'Matches'}:{label:`${nextMatch.round_name} maps pending`,detail:maps.message,href:maps.href,action:maps.label,kind:'Maps'});
+  }
+  if(!tasks.length&&live.matches.length&&tournament.status!=='completed'&&!live.historical){const completion=await readCompletion(db,tournament.id);if(completion?.ready)tasks.push({label:'Ready to complete tournament',detail:'All required results and details are complete.',href:base,action:'Complete Tournament',kind:'Completion'});else if(completion?.issues.length)tasks.push({label:'Review completion',detail:completion.issues[0],href:base,action:'Open Tournament',kind:'Completion'});}
+  return {tournament,base,teams:state.participants.length,players:saved.roster.length,size:state.stage?.[3],roster,live,mapStates,tasks,
+   steps:[{label:'Participants',value:`${state.participants.length} teams`,ready:state.participants.length>=2},
+    {label:'Roster',value:`${roster.teams.filter(team=>team.ready).length} / ${state.participants.length} ready`,ready:roster.ready},
+    {label:'Maps',value:live.historical?'Historical':mapStates.length?`${mapStates.filter(round=>round.assignment).length} / ${mapStates.length} rounds confirmed`:'Match Veto',ready:mapStates.length>0&&mapStates.every(round=>round.assignment)},
+    {label:'Bracket',value:live.matches.length?`${live.matches.length} matches`:'Not generated',ready:live.matches.length>0}]};
+ }));
+}catch{failed=true;Astro.response.status=503;}
+const active=activity.filter(row=>row.tournament.status!=='completed');
+const recent=activity.filter(row=>row.tournament.status==='completed');
+const attention=activity.flatMap(row=>row.tasks.map(task=>({...task,tournament:row.tournament})));
+const activeCount=tournaments.filter(row=>row.status!=='completed').length;
+const date=value=>new Date(`${value}T00:00:00Z`).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
 ---
-<AdminLayout title="Tournaments">
-  <header class="admin-heading"><div><h1>Tournaments</h1><p>Manage tournament setup and schedules.</p></div><a class="admin-button" href="/admin/tournaments/new">Create Tournament</a></header>
-  {unavailable ? <p role="alert" class="admin-error">Could not load tournaments from staging. Check the database connection and migrations, then reload.</p> : tournaments.length === 0 ?
-    <section class="admin-empty"><h2>No tournaments yet</h2><p>Create a tournament to begin its setup.</p></section> :
-    <ul class="admin-list">{tournaments.map(tournament => <li>
-      <div><h2><a href={`/admin/tournaments/${tournament.id}`}>{tournament.name}</a></h2><p>{tournament.start_date} to {tournament.end_date}</p><p>{tournament.region} · {tournament.format}</p></div>
-      <div class="admin-row-end"><span class={`status-badge status-${tournament.status}`}>{tournament.status}</span><a href={`/admin/tournaments/${tournament.id}`}>Open tournament</a></div>
-    </li>)}</ul>}
+<AdminLayout title="Overview">
+ <header class="admin-heading"><div><h1>Overview</h1><p>CFL Esports ID · Competition operations</p></div><a class="admin-link" href="/admin/tournaments">All Tournaments</a></header>
+ {failed?<p class="admin-error" role="alert">Could not load competition activity. Reload to try again.</p>:<>
+ <section class="operations-section" aria-labelledby="active-title"><header class="section-heading"><h2 id="active-title">Active tournaments</h2>{activeCount>8&&<span class="admin-help">Showing 8 of {activeCount}</span>}</header>
+ {active.length?<div class="activity-list">{active.map(row=><article class="tournament-activity">
+  <div class="activity-main"><div class="activity-identity"><div class="activity-title"><h3><a href={row.base}>{row.tournament.name}</a></h3>{row.tournament.is_test===1&&<span class="test-badge">TEST</span>}<Status label={row.tournament.status==='ongoing'?'Ongoing':'Upcoming'} tone="info"/></div><p class="admin-meta">{date(row.tournament.start_date)} / {date(row.tournament.end_date)}</p><p class="activity-metrics"><span>{row.teams} teams</span><span>{row.players} saved players</span>{row.size&&<span>Bracket {row.size}</span>}</p></div>
+  <ol class="activity-steps">{row.steps.map(step=><li data-ready={String(step.ready)}><strong>{step.label}</strong><span>{step.value}</span></li>)}</ol></div>
+  <div class="activity-next"><div><span class="admin-eyebrow">{row.tasks.length?'Next task':'Tournament workspace'}</span><strong>{row.tasks[0]?.label??'Review bracket and matches'}</strong><p class="admin-meta">{row.tasks[0]?.detail??'No pending setup task in the current state.'}</p></div><a class="admin-button" href={row.tasks[0]?.href??row.base}>{row.tasks[0]?.action??'Open Tournament'}</a></div>
+ </article>)}</div>:<p class="admin-empty">No active tournaments. <a href="/admin/tournaments/new">Create Tournament</a></p>}
+ </section>
+ {recent.length>0&&<section class="operations-section" aria-labelledby="recent-title"><header class="section-heading"><h2 id="recent-title">Recent tournaments</h2></header><div class="activity-list">{recent.map(row=><article class="tournament-activity activity-completed"><div><div class="activity-title"><h3>{row.tournament.name}</h3><Status label="Completed" tone="ready"/>{row.tournament.is_test===1&&<span class="test-badge">TEST</span>}</div><p class="admin-meta">{date(row.tournament.start_date)} / {date(row.tournament.end_date)}</p><p class="activity-metrics"><span>{row.teams} teams</span><span>{row.players} saved players</span>{row.size&&<span>Bracket {row.size}</span>}</p></div><a class="admin-outline" href={row.base}>View Tournament</a></article>)}</div></section>}
+ <section class="operations-section" aria-labelledby="attention-title"><header class="section-heading"><h2 id="attention-title">Needs Attention</h2></header>
+ {attention.length?<ul class="attention-list">{attention.map(task=><li><div><strong>{task.label}</strong><span class="admin-meta">{task.tournament.name}</span></div><p class="admin-meta">{task.detail}</p><Status label={task.kind} tone="pending"/><a class="admin-link" href={task.href}>{task.action}</a></li>)}</ul>:<p class="admin-empty">No pending tasks in the tournaments shown.</p>}
+ </section>
+ <footer class="database-links"><strong>Database</strong><span class="admin-meta">Master records</span><nav aria-label="Database shortcuts"><a href="/admin/teams">Teams</a><a href="/admin/players">Players</a><a href="/admin/maps">Maps</a></nav></footer>
+ </>}
 </AdminLayout>

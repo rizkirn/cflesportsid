@@ -1,164 +1,78 @@
 ---
-export const prerender = false;
+export const prerender=false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import MatchDetailActions from '../../../../components/admin/MatchDetailActions.astro';
+import ResultInspector from '../../../../components/admin/ResultInspector.astro';
+import OperationalBracket from '../../../../components/admin/OperationalBracket.astro';
 import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
 import { readBracketState, readBracketForm, officialDraw, confirmOfficialBracket } from '../../../../admin/bracket.mjs';
-import { readLiveResults, saveLiveResult, seriesWinner } from '../../../../admin/live-results.mjs';
-const db = requireLocalAdmin(Astro.request, import.meta.env.DEV, env);
-let state; let live; let preview; let message = ''; let failed = false; let drawCount = '1';
-const secret = (env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
+import { readLiveResults } from '../../../../admin/live-results.mjs';
+import { readResultEditorForm, saveEditedResult } from '../../../../admin/result-editor.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+let state;let live;let preview;let submitted;let message='';let drawCount='1';
+const secret=(env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
 try {
-  state = await readBracketState(db, Astro.params.id);
-  if (state) live = await readLiveResults(db, state.tournament.id);
-  if (!state) Astro.response.status = 404;
-  if (state && Astro.request.method === 'POST') {
-    const form = await readBracketForm(Astro.request);
-    drawCount = form.draw_count ?? '1';
-    if (form.intent === 'save-score' || form.intent === 'confirm-result' || form.intent === 'confirm-walkover') {
-      await saveLiveResult(db, state.tournament.id, form);
-      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
-    } else if (form.intent === 'draw') preview = await officialDraw(state, form, secret);
-    else if (form.intent === 'confirm') {
-      await confirmOfficialBracket(db, state.tournament.id, form, secret);
-      return Astro.redirect(`/admin/tournaments/${state.tournament.id}/bracket`, 303);
-    } else throw new AdminError('Unknown bracket action.');
+  state=await readBracketState(db,Astro.params.id);
+  if(!state)Astro.response.status=404;
+  else {
+    live=await readLiveResults(db,state.tournament.id);
+    if(Astro.request.method==='POST') {
+      const form=Astro.url.searchParams.has('match')?await readResultEditorForm(Astro.request):await readBracketForm(Astro.request);
+      submitted=form;drawCount=form.draw_count??'1';
+      if(form.intent==='edit-result') {
+        if(form.match_id!==Astro.url.searchParams.get('match'))throw new AdminError('Selected match changed. Reload the inspector.',409);
+        await saveEditedResult(db,state.tournament.id,form);
+        return Astro.redirect(`${Astro.url.pathname}?match=${encodeURIComponent(form.match_id)}&saved=result`,303);
+      }
+      if(form.intent==='draw')preview=await officialDraw(state,form,secret);
+      else if(form.intent==='confirm') {
+        await confirmOfficialBracket(db,state.tournament.id,form,secret);
+        return Astro.redirect(Astro.url.pathname,303);
+      }else throw new AdminError('Unknown bracket action.');
+    }
   }
-} catch (error) {
-  if (error instanceof AdminError) { message = error.message; Astro.response.status = error.status; }
-  else { console.error('[admin] Bracket operation failed', error); message = 'Could not load or save the bracket. Reload to check the saved state before trying again.'; failed = !state; Astro.response.status = 503; }
+}catch(error) {
+  message=error instanceof AdminError?error.message:'Could not load or save the bracket. Reload to review the saved state.';
+  Astro.response.status=error instanceof AdminError?error.status:503;
+  if(!(error instanceof AdminError))console.error('[admin] Bracket operation failed',error);
 }
-const teamName = (id?: string) => state?.participants.find(team => team.id === id)?.name ?? id;
-const enough = state && state.stage && state.participants.length >= Math.max(2, state.stage[3] / 2) && state.participants.length <= state.stage[3];
+const name=(id)=>state?.participants.find(team=>team.id===id)?.name??id;
+const selected=live?.matches.find(match=>match.id===Astro.url.searchParams.get('match'));
+const enough=state?.stage&&state.participants.length>=Math.max(2,state.stage[3]/2)&&state.participants.length<=state.stage[3];
 ---
 <AdminLayout title="Bracket" workspace={state}>
-  {message && <p role="alert" class="admin-error">{message}</p>}
-  {!failed && (!state ? <><h1>Tournament not found</h1><a href="/admin">Back to tournaments</a></> : <>
-    <header class="admin-heading"><div><h1>{state.tournament.name}</h1><p>Bracket · {state.stage?.[1]}</p></div><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Back to Roster</a></header>
-    <p class="admin-help">{state.participants.length} teams · {state.stage?.[3] ?? 0} slots · {(state.stage?.[3] ?? 0) - state.participants.length} BYEs</p>
-    {live?.matches.length ? <section aria-labelledby="live-results-heading">
-      <h2 id="live-results-heading">Live bracket results</h2>
-      <p class="admin-help">Save Score publishes the series score. Confirm Result advances the winner and any loser source. Setup, Participants and Roster remain read-only.</p>
-      <p class="admin-help">Confirmed results are read-only. Corrections require a later explicit admin action.</p>
-      <div class="official-rounds" style={`--official-round-count:${state.options?.stage.rounds.length ?? 1}`}>
-        {state.options?.stage.rounds.map(round => <section><h3>{round.name}</h3>
-          <ol class="official-slots live-slots">
-            {JSON.parse(live!.snapshot).byes.filter((b: string[]) => b[0] === state!.stage?.[0] && b[3] === round.id).map((b: string[]) => <li><strong>BYE · {teamName(b[2])}</strong><span>Advances automatically</span></li>)}
-            {live!.matches.filter(m => m.round_id === round.id).map(m => {
-              const locked = live!.historical || m.status === 'completed' || Boolean(m.winner_id) || state!.tournament.status === 'completed' || Boolean(JSON.parse(live!.snapshot).tournament?.[1]);
-              const resolved = Boolean(m.team1_id && m.team2_id);
-              const winnerSide = seriesWinner(m.score1,m.score2,m.series_type,m.map_count);
-              const sourceLabel = (side: number) => {
-                const source = JSON.parse(live!.snapshot).sources.find((s: unknown[]) => s[0] === m.id && s[1] === side);
-                const parent = live!.matches.find(match => match.id === source?.[3]);
-                return source ? `${source[2] === 'loser' ? 'Loser' : 'Winner'} of ${parent ? `${parent.round_name} · Match ${parent.bracket_slot}` : source[4]}` : 'TBD';
-              };
-              return <li data-live-match={m.id}>
-                <strong>Match {m.bracket_slot} · {m.result_type==='walkover'?'W/O':m.status === 'completed' ? 'Result confirmed' : m.status}</strong>
-                <span>{m.map_count} fixed maps</span>
-                {locked || !resolved ? <><span>{teamName(m.team1_id ?? undefined) ?? sourceLabel(1)} · {m.result_type==='walkover'?'W/O':m.score1}</span><span>{teamName(m.team2_id ?? undefined) ?? sourceLabel(2)} · {m.result_type==='walkover'?'W/O':m.score2}</span>{m.winner_id && <span>Winner: {teamName(m.winner_id)}</span>}{!resolved && <span>Waiting for feeder results</span>}</> : <>
-                  <form method="POST" class="live-score-form" data-live-form>
-                    <input type="hidden" name="intent" value="save-score" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
-                    <label for={`${m.id}-score1`}><span>{teamName(m.team1_id ?? undefined)}</span><input id={`${m.id}-score1`} name="score1" type="number" min="0" max={m.map_count} step="1" value={m.score1} required inputmode="numeric" /></label>
-                    <label for={`${m.id}-score2`}><span>{teamName(m.team2_id ?? undefined)}</span><input id={`${m.id}-score2`} name="score2" type="number" min="0" max={m.map_count} step="1" value={m.score2} required inputmode="numeric" /></label>
-                    <button class="admin-button" type="submit">Save Score</button><p class="admin-submit-status" role="status"></p>
-                  </form>
-                  {winnerSide ? <form method="POST" data-live-form>
-                    <input type="hidden" name="intent" value="confirm-result" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
-                    <p>Saved result: {m.score1}–{m.score2} · Winner: {teamName(winnerSide === 1 ? m.team1_id! : m.team2_id!)}</p>
-                    <button class="admin-button" type="submit">Confirm Result</button><p class="admin-submit-status" role="status"></p>
-                  </form> : <span>Save a winning score before confirming.</span>}
-                  <form method="POST" data-live-form>
-                    <input type="hidden" name="intent" value="confirm-walkover" /><input type="hidden" name="match_id" value={m.id} /><input type="hidden" name="result_revision" value={live!.revision} />
-                    <label for={`${m.id}-wo`}>Full-match W/O winner</label>
-                    <select id={`${m.id}-wo`} name="walkover_winner" required><option value="">Select winner</option>{[m.team1_id,m.team2_id].map(team=><option value={team!}>{teamName(team!)}</option>)}</select>
-                    <p>No maps were played. Confirms the winner and advances the bracket.</p>
-                    <button class="admin-outline" type="submit">Confirm Full-match W/O</button><p class="admin-submit-status" role="status"></p>
-                  </form>
-                </>}
-                <MatchDetailActions tournamentId={state!.tournament.id} match={m} />
-              </li>;
-            })}
-          </ol>
-        </section>)}
-      </div>
-    </section> : state.locked ? <section class="admin-next"><h2>Bracket is read-only</h2><p>Setup, Participants and Roster are locked once a bracket is saved or the tournament starts.</p><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section> : !state.ready ? <section class="admin-next"><h2>Setup required</h2><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Complete Setup</a></section> : !state.roster.ready ? <section class="admin-next"><h2>Roster incomplete</h2><p>Every participant needs 5 to 7 players with a saved tournament IGN before Official Draw.</p><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Complete Tournament Roster</a></section> : !enough ? <section class="admin-next"><h2>Review participant count</h2><p>A {state.stage?.[3]}-slot bracket needs {Math.max(2,state.stage![3]/2)} to {state.stage?.[3]} teams to avoid BYE vs BYE.</p><div class="admin-actions"><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Add participants</a><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Use a smaller bracket</a></div></section> : <>
-      <form method="POST" class="admin-form" data-bracket-form>
-        <input type="hidden" name="revision" value={state.revision} />
-        <input type="hidden" name="intent" value="draw" />
-        <label for="draw-count">How many draws?</label>
-        <input id="draw-count" name="draw_count" type="number" min="1" max="20" value={drawCount} step="1" required aria-describedby="draw-help" />
-        <p id="draw-help" class="admin-help">Choose 1 to 20. Each draw starts from the same saved participant pool. Only the last draw can become the official bracket.</p>
-        <button class="admin-button" type="submit">{preview ? 'Start a new draw sequence' : 'Start Official Draw'}</button>
-        <p class="admin-submit-status" role="status"></p>
-      </form>
-      {preview && <>
-        <p class="admin-help" role="status">{preview.draws.length} draws completed. Select a draw to review it. Nothing has been saved. Only Draw {preview.draws.length} can be confirmed.</p>
-        <div class="draw-sequence" aria-label="Draw history">
-        {preview.draws.map((bracket, index) => <details name="official-draw-history" class="official-draw" data-final={index === preview.draws.length-1 ? 'true' : 'false'} open={index === preview.draws.length-1}>
-          <summary>Draw {index+1}{index === preview.draws.length-1 ? ' · Final candidate' : ''}</summary>
-          <h2 id={`draw-${index+1}`}>Draw {index+1} of {preview.draws.length}{index === preview.draws.length-1 ? ': Final candidate' : ''}</h2>
-          <div class="official-rounds" style={`--official-round-count:${bracket.tournament.data.stages[0].rounds.length}`}>{bracket.tournament.data.stages[0].rounds.map(round => <section>
-            <h3>{round.name}</h3><ol class="official-slots">{bracket.draw.filter(entry=>entry.roundId===round.id).map(entry=><li>
-              <strong>Match {entry.number}{entry.kind==='bye' ? ' · BYE' : ''}</strong>
-              <span>{teamName(entry.team1) ?? `${round.placement===3?'Loser':'Winner'} of Match ${entry.source1}`}</span>
-              <span>{entry.kind==='bye' ? 'Advances automatically' : teamName(entry.team2) ?? `${round.placement===3?'Loser':'Winner'} of Match ${entry.source2}`}</span>
-            </li>)}</ol>
-          </section>)}</div>
-        </details>)}
-        </div>
-        <form method="POST" class="admin-form admin-next" data-bracket-form data-confirm-form>
-          <input type="hidden" name="revision" value={state.revision} /><input type="hidden" name="intent" value="confirm" /><input type="hidden" name="token" value={preview.token} />
-          <h2>Confirm Draw {preview.draws.length}</h2>
-          <p class="admin-help">This saves BYEs, matches and progression to staging, then locks Setup, Participants and Roster. Match dates initially use the saved tournament start date, {state.options?.startDate}; individual schedules still need review. The preview expires in two hours or when the development server restarts.</p>
-          <button class="admin-button" type="submit">Confirm Official Bracket</button><p class="admin-submit-status" role="status"></p>
-        </form>
+  {message&&!selected&&<p class="admin-error" role="alert">{message}</p>}
+  {!state?<><h1>Tournament unavailable</h1><a href="/admin/tournaments">Back to tournaments</a></>:<>
+    <header class="admin-heading"><div><h1>Bracket</h1><p>Fixed {state.stage?.[5] ?? 3} Maps</p></div><a href={`/admin/tournaments/${state.tournament.id}/matches`}>Open Matches</a></header>
+    {Astro.url.searchParams.get('saved')==='result'&&<p role="status">Result saved. Progression and correction history are up to date.</p>}
+    {live?.matches.length?<div>
+      <section class="admin-master">
+        <OperationalBracket db={db} state={state} live={live} selected={selected}/>
+      </section>
+      {selected&&<ResultInspector db={db} state={state} live={live} match={selected} submitted={submitted} message={message}/>}
+    </div>:state.locked?<section class="admin-empty"><h2>Bracket is read-only</h2><a href={`/admin/tournaments/${state.tournament.id}/matches`}>View Matches</a></section>:!state.ready?<section class="admin-empty"><h2>Competition setup required</h2><a href={`/admin/tournaments/${state.tournament.id}/setup`}>Configure competition</a></section>:!state.roster.ready?<section class="admin-empty"><h2>Roster incomplete</h2><p>Each participant needs 5 to 7 players with a saved tournament IGN.</p><a href={`/admin/tournaments/${state.tournament.id}/roster`}>Open Roster</a></section>:!enough?<section class="admin-empty"><h2>Review participant count</h2><p>This {state.stage[3]}-slot bracket needs {Math.max(2,state.stage[3]/2)} to {state.stage[3]} teams.</p><a href={`/admin/tournaments/${state.tournament.id}/participants`}>Open Participants</a></section>:<>
+      <form method="post" class="admin-form" data-pending-form><input type="hidden" name="intent" value="draw"/><input type="hidden" name="revision" value={state.revision}/><label>Draw count<input type="number" name="draw_count" min="1" max="20" step="1" value={drawCount} required/></label><p class="admin-help">Review 1 to 20 draws. Only the final candidate can be confirmed.</p><button type="submit" class="admin-button">{preview?'Start New Draw':'Start Official Draw'}</button><p class="admin-submit-status" role="status"></p></form>
+      {preview&&<><div class="draw-sequence">{preview.draws.map((bracket,index)=><details name="official-draw-history" class="official-draw" data-final={index===preview.draws.length-1?'true':'false'} open={index===preview.draws.length-1}><summary>Draw {index+1}{index===preview.draws.length-1?' · Final candidate':''}</summary><h2>Draw {index+1} of {preview.draws.length}{index===preview.draws.length-1?': Final candidate':''}</h2><div class="official-rounds" style={`--official-round-count:${bracket.tournament.data.stages[0].rounds.length}`}>{bracket.tournament.data.stages[0].rounds.map(round=><section><h3>{round.name}</h3><ol class="official-slots">{bracket.draw.filter(entry=>entry.roundId===round.id).map(entry=><li><strong>Match {entry.number}{entry.kind==='bye'?' · BYE':''}</strong><span>{name(entry.team1)??`${round.placement===3?'Loser':'Winner'} of Match ${entry.source1}`}</span><span>{entry.kind==='bye'?'Advances automatically':name(entry.team2)??`${round.placement===3?'Loser':'Winner'} of Match ${entry.source2}`}</span></li>)}</ol></section>)}</div></details>)}</div>
+        <div class="admin-next" data-confirm-form><button type="button" class="admin-button" data-open-draw-confirm>Confirm Official Bracket</button><dialog class="admin-dialog" data-draw-confirm aria-labelledby="draw-confirm-title"><h2 id="draw-confirm-title">Confirm Draw {preview.draws.length}</h2><p>Creates matches and progression. Setup, participants and rosters become read-only.</p><form method="post" class="admin-form" data-pending-form><input type="hidden" name="intent" value="confirm"/><input type="hidden" name="revision" value={state.revision}/><input type="hidden" name="token" value={preview.token}/><div class="admin-actions"><button type="button" class="admin-outline" data-close-draw-confirm>Cancel</button><button type="submit" class="admin-button">Confirm Draw</button></div><p class="admin-submit-status" role="status"></p></form></dialog></div>
       </>}
     </>}
-  </>)}
+  </>}
 </AdminLayout>
 <script>
-  document.querySelectorAll<HTMLElement>('[data-live-match]').forEach(row => {
-    const scoreForm = row.querySelector<HTMLFormElement>('.live-score-form');
-    const confirmForm = row.querySelector<HTMLFormElement>('form:has([value="confirm-result"])');
-    scoreForm?.addEventListener('input', () => {
-      const button = confirmForm?.querySelector<HTMLButtonElement>('button');
-      if (button) button.disabled = true;
-      const status = confirmForm?.querySelector('[role="status"]');
-      if (status) status.textContent = 'Save score changes before confirming.';
-    });
-  });
-  document.querySelectorAll<HTMLFormElement>('[data-live-form]').forEach(form => {
-    let pending = false;
-    const button = form.querySelector<HTMLButtonElement>('button');
-    const status = form.querySelector('[role="status"]');
-    form.addEventListener('submit', event => {
-      if (pending) { event.preventDefault(); return; }
-      if (event.defaultPrevented) return;
-      pending = true; form.setAttribute('aria-busy','true');
-      if (button) button.disabled = true;
-      if (status) status.textContent = 'Saving result…';
-    });
-    window.addEventListener('pageshow', () => { pending=false; form.removeAttribute('aria-busy'); if(button)button.disabled=false; if(status)status.textContent=''; });
-  });
-  const history = Array.from(document.querySelectorAll<HTMLDetailsElement>('[name="official-draw-history"]'));
-  const confirmation = document.querySelector<HTMLFormElement>('[data-confirm-form]');
-  history.forEach(draw => draw.addEventListener('toggle', () => {
-    if (draw.open) history.filter(other => other !== draw).forEach(other => { other.open = false; });
-    if (confirmation) confirmation.hidden = !history.some(entry => entry.open && entry.dataset.final === 'true');
+  const draws=Array.from(document.querySelectorAll<HTMLDetailsElement>('[name="official-draw-history"]'));
+  const confirmation=document.querySelector<HTMLElement>('[data-confirm-form]');
+  const drawDialog=document.querySelector<HTMLDialogElement>('[data-draw-confirm]');
+  document.querySelector('[data-open-draw-confirm]')?.addEventListener('click',()=>drawDialog?.showModal());
+  document.querySelector('[data-close-draw-confirm]')?.addEventListener('click',()=>drawDialog?.close());
+  if(draws.length){
+    const nav=document.createElement('nav');nav.className='draw-pagination';nav.setAttribute('aria-label','Draw navigation');draws[0].parentElement?.before(nav);
+    let current=draws.length-1;
+    const render=()=>{nav.replaceChildren();const edges=nav.clientWidth<380&&current>1&&current<draws.length-2?[0,draws.length-1]:[0,1,draws.length-2,draws.length-1];const visible=new Set([...edges,current-1,current,current+1].filter(index=>index>=0&&index<draws.length));let previous=-1;
+      [...visible].sort((a,b)=>a-b).forEach(index=>{if(previous>=0&&index>previous+1){const gap=document.createElement('span');gap.textContent='…';nav.append(gap);}const button=document.createElement('button');button.type='button';button.className='admin-outline';button.textContent=String(index+1);button.setAttribute('aria-current',index===current?'page':'false');button.addEventListener('click',()=>{current=index;draws.forEach((draw,i)=>{draw.hidden=i!==current;draw.open=i===current;});if(confirmation)confirmation.hidden=current!==draws.length-1;render();});nav.append(button);previous=index;});};
+    draws.forEach((draw,index)=>{draw.hidden=index!==current;draw.open=index===current;});render();window.addEventListener('resize',render);
+  }
+  draws.forEach(draw=>draw.addEventListener('toggle',()=>{
+    if(draw.open)draws.filter(other=>other!==draw).forEach(other=>other.open=false);
+    if(confirmation)confirmation.hidden=!draws.some(row=>row.open&&row.dataset.final==='true');
   }));
-  document.querySelectorAll<HTMLFormElement>('[data-bracket-form]').forEach(form => {
-    let pending = false;
-    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-    const status = form.querySelector('.admin-submit-status');
-    form.addEventListener('submit', event => {
-      if (pending) { event.preventDefault(); return; }
-      if (event.defaultPrevented) return;
-      pending = true; form.setAttribute('aria-busy','true');
-      if (button) button.disabled = true;
-      if (status) status.textContent = form.querySelector<HTMLInputElement>('[name="intent"]')?.value === 'confirm' ? 'Saving official bracket…' : 'Generating draws…';
-    });
-    window.addEventListener('pageshow',()=>{pending=false;form.removeAttribute('aria-busy');if(button)button.disabled=false;if(status)status.textContent='';});
-  });
 </script>

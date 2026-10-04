@@ -1,0 +1,17 @@
+---
+const {message='Unsaved changes'}=Astro.props;
+---
+<dialog class="admin-dialog" data-unsaved-dialog aria-labelledby="unsaved-title"><h2 id="unsaved-title">{message}</h2><p>Discard changes and leave this page?</p><div class="admin-actions"><button type="button" class="admin-button" data-stay>Stay</button><button type="button" class="admin-outline" data-discard>Discard Changes</button></div></dialog>
+<script>
+ const form=document.querySelector<HTMLFormElement>('[data-draft-form]');const dialog=document.querySelector<HTMLDialogElement>('[data-unsaved-dialog]');const bar=document.querySelector<HTMLElement>('[data-draft-bar]');
+ if(form){
+ const fingerprint=()=>JSON.stringify(Array.from(form.querySelectorAll<HTMLInputElement|HTMLSelectElement>('input,select')).filter(field=>/^(entries|participants)\./.test(field.name)).map(field=>[field.name,field.value]));
+ const initial=fingerprint();let submitting=false;let target='';let dirty=form.dataset.dirty==='true';
+ const update=()=>{dirty=form.dataset.dirty==='true'||fingerprint()!==initial;if(bar)bar.hidden=!dirty;};
+ form.addEventListener('input',update);form.addEventListener('change',update);form.addEventListener('draftchange',update);
+ form.addEventListener('submit',event=>{if(!event.defaultPrevented)submitting=true;});window.addEventListener('pageshow',()=>submitting=false);
+ window.addEventListener('beforeunload',event=>{if(dirty&&!submitting){event.preventDefault();event.returnValue='';}});
+ document.addEventListener('click',event=>{const anchor=(event.target as Element)?.closest<HTMLAnchorElement>('a[href]');if(!anchor||!dirty||submitting||anchor.target==='_blank'||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;const url=new URL(anchor.href);if(url.href===location.href||url.pathname===location.pathname&&url.search===location.search&&url.hash)return;event.preventDefault();target=url.href;dialog?.showModal();});
+ dialog?.querySelector('[data-stay]')?.addEventListener('click',()=>dialog.close());dialog?.querySelector('[data-discard]')?.addEventListener('click',()=>{dirty=false;submitting=true;location.assign(target);});update();
+ }
+</script>

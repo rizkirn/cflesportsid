@@ -1,0 +1,33 @@
+---
+import BracketTeams from './BracketTeams.astro';
+const {state,live,selected}=Astro.props;
+const snapshot=JSON.parse(live.snapshot);const rounds=state.options.stage.rounds.filter(round=>round.placement!==3);const bronze=state.options.stage.rounds.filter(round=>round.placement===3);
+const teams=(await Astro.props.db.prepare('SELECT id,name,tag,color,logo FROM teams').all()).results;
+const team=id=>teams.find(team=>team.id===id);
+const byes=snapshot.byes.filter(row=>row[0]===state.stage[0]);
+const rows=Math.max(2,(live.matches.filter(match=>match.round_id===rounds[0]?.id).length+byes.filter(row=>row[3]===rounds[0]?.id).length)*2);
+const source=(match,side)=>{const row=snapshot.sources.find(row=>row[0]===match.id&&row[1]===side);const parent=live.matches.find(match=>match.id===row?.[3]);return row?`${row[2]==='loser'?'Loser':'Winner'} · ${parent?.round_name??'BYE'} ${parent?.bracket_slot??''}`:'TBD';};
+const sourceId=(match,side)=>{const row=snapshot.sources.find(row=>row[0]===match.id&&row[1]===side);return row?.[3]??row?.[4]??'';};
+const matchHref=(match)=>match.status==='completed'&&match.result_type!=='walkover'?`/admin/tournaments/${state.tournament.id}/matches/${match.id}`:`${Astro.url.pathname}?match=${encodeURIComponent(match.id)}`;
+---
+<div class="operations-bracket-scroll"><div class="operations-bracket" style={`--rounds:${rounds.length};--rows:${rows}`}>
+ {rounds.map((round,index)=><h2 style={`grid-column:${index+1};grid-row:1;order:${index*100}`}>{round.name}</h2>)}
+ {rounds.flatMap((round,index)=>[
+ ...byes.filter(row=>row[3]===round.id).map(row=><div class="operations-match operations-bye" data-node={row[1]} style={`grid-column:${index+1};grid-row:${2+(2*row[4]-1)*2**index};order:${index*100+row[4]}`}><span>{team(row[2])?.name??row[2]}</span><small>BYE · Advances</small></div>),
+ ...live.matches.filter(match=>match.round_id===round.id).map(match=><a class:list={['operations-match',{'is-selected':selected?.id===match.id}]} data-node={match.id} data-source1={sourceId(match,1)} data-source2={sourceId(match,2)} href={matchHref(match)} style={`grid-column:${index+1};grid-row:${2+(2*match.bracket_slot-1)*2**index};order:${index*100+match.bracket_slot}`} aria-label={`${round.name} Match ${match.bracket_slot}: ${team(match.team1_id)?.name??'TBD'} vs ${team(match.team2_id)?.name??'TBD'}`}>
+ <BracketTeams match={match} teams={teams} source={source}/>
+ </a>)])}
+ <svg class="operations-connectors" aria-hidden="true"></svg></div></div>
+{bronze.map(round=><section class="operations-bronze"><h2>{round.name}</h2>{live.matches.filter(match=>match.round_id===round.id).map(match=><a class:list={['operations-match',{'is-selected':selected?.id===match.id}]} href={matchHref(match)} aria-label={`${round.name} Match ${match.bracket_slot}: ${team(match.team1_id)?.name??'TBD'} vs ${team(match.team2_id)?.name??'TBD'}`}><BracketTeams match={match} teams={teams} source={source}/></a>)}</section>)}
+<style>
+.operations-bracket{position:relative}:global(.admin-page) a.operations-match{display:flex;align-items:stretch;width:100%}.operations-match{z-index:1}.operations-connectors{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.operations-bracket-scroll{max-width:100%;overflow-x:auto;padding-block:1rem}.operations-bracket{display:grid;grid-template-columns:repeat(var(--rounds),minmax(15rem,1fr));grid-template-rows:3rem repeat(var(--rows),3.625rem);column-gap:2.5rem;align-items:center;min-width:calc(var(--rounds)*17.5rem - 2.5rem)}.operations-bracket h2{align-self:start;font-family:var(--font-heading);text-transform:uppercase;font-size:1.4rem}.operations-match{display:flex;flex-direction:column;min-width:0;background:#111215;border:1px solid var(--border);color:var(--text-primary);text-decoration:none;position:relative}.operations-match:hover,.operations-match.is-selected{border-color:var(--accent)}.operations-team{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.6rem;border-left:3px solid var(--team-color)}.operations-team+.operations-team{border-top:1px solid var(--border)}.operations-team-name{display:flex;gap:.5rem;align-items:center;min-width:0;overflow-wrap:anywhere}.operations-team img{object-fit:contain}.operations-team b{font-family:var(--font-heading);font-size:1.4rem}.operations-team.winner b{color:#e7bf59}.operations-team.loser{color:var(--text-secondary)}.operations-bye{padding:.7rem}.operations-bronze{max-width:20rem;margin-top:1rem}.operations-bronze .operations-match>span{padding:.6rem;display:flex;justify-content:space-between}
+.operations-bracket{grid-template-columns:repeat(var(--rounds),minmax(15rem,18rem));grid-template-rows:3rem repeat(calc(var(--rows) + 1),3.625rem)}
+@media(max-width:760px){.operations-bracket{display:flex;flex-direction:column;align-items:stretch;min-width:0;gap:.65rem}.operations-bracket h2{margin-top:1rem}.operations-bracket-scroll{overflow:visible}.operations-bronze{max-width:none}}
+@media(max-width:760px){.operations-connectors{display:none}}
+</style>
+<script>
+ const grid=document.querySelector<HTMLElement>('.operations-bracket');const svg=grid?.querySelector<SVGElement>('.operations-connectors');
+ const draw=()=>{if(!grid||!svg)return;svg.replaceChildren();const bounds=grid.getBoundingClientRect();svg.setAttribute('viewBox',`0 0 ${bounds.width} ${bounds.height}`);const nodes=new Map(Array.from(grid.querySelectorAll<HTMLElement>('[data-node]')).map(node=>[node.dataset.node,node]));nodes.forEach(target=>{for(const id of [target.dataset.source1,target.dataset.source2]){const from=nodes.get(id);if(!from)continue;const a=from.getBoundingClientRect();const b=target.getBoundingClientRect();const x1=a.right-bounds.left;const x2=b.left-bounds.left;const y1=a.top+a.height/2-bounds.top;const y2=b.top+b.height/2-bounds.top;const middle=(x1+x2)/2;const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M ${x1} ${y1} H ${middle} V ${y2} H ${x2}`);path.setAttribute('stroke','#64748b');path.setAttribute('stroke-width','2');path.setAttribute('fill','none');svg.append(path);}});};
+ if(grid)new ResizeObserver(draw).observe(grid);document.fonts.ready.then(draw);draw();
+</script>

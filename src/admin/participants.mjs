@@ -11,7 +11,7 @@ const idPattern = /^[a-z0-9-]{1,120}$/;
 export async function readParticipantState(db, id) {
   if (!id || !idPattern.test(id)) return null;
   const result = await db.batch([
-    db.prepare('SELECT id, name, status FROM tournaments WHERE id = ?').bind(id),
+    db.prepare('SELECT * FROM tournaments WHERE id = ?').bind(id),
     db.prepare(`SELECT ${snapshotSQL} AS snapshot`).bind(id),
     db.prepare('SELECT id, name, tag, region FROM teams ORDER BY name COLLATE NOCASE, id'),
   ]);
@@ -24,7 +24,7 @@ export async function readParticipantState(db, id) {
   const revision = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('');
   const teams = result[2].results;
   const ready = state.setup.stages.length === 1 && state.setup.rounds.length > 0 && stage[2] === 'single-elimination'
-    && [4, 8, 16, 32].includes(stage[3]);
+    && [4, 8, 16, 32, 64].includes(stage[3]);
   return { tournament, teams, snapshot, revision, stage, ready,
     participants: state.participants.map(id => teams.find(team => team.id === id)).filter(Boolean),
     locked: tournament.status !== 'upcoming' || state.setup.matches > 0 || state.setup.byes > 0 || state.setup.stages.length > 1 };
@@ -122,15 +122,6 @@ export async function saveParticipants(db, id, form) {
     ...teams.filter(team => team.isNew).map(team => db.prepare(`INSERT INTO teams (id, name, tag, region) VALUES (?, ?, ?, ?)`).bind(team.id, team.name, team.tag, team.region)),
     ...state.participants.filter(team => !teams.some(selected => selected.id === team.id)).map(team => db.prepare('DELETE FROM tournament_teams WHERE tournament_id = ? AND team_id = ?').bind(id,team.id)),
     ...teams.map(team => db.prepare('INSERT INTO tournament_teams (tournament_id, team_id) VALUES (?, ?) ON CONFLICT(tournament_id,team_id) DO NOTHING').bind(id, team.id)),
-    ...teams.filter(team => !state.participants.some(current => current.id === team.id)).map(team => db.prepare(`
-      INSERT INTO tournament_rosters(tournament_id,team_id,player_id,ign_snapshot,position)
-      SELECT ?1, ?2, r.player_id, r.ign_snapshot, r.position FROM tournament_rosters r
-      WHERE r.team_id = ?2 AND r.tournament_id = (
-        SELECT t.id FROM tournaments t WHERE t.start_date < (SELECT start_date FROM tournaments WHERE id = ?1)
-          AND EXISTS(SELECT 1 FROM tournament_rosters previous WHERE previous.tournament_id = t.id AND previous.team_id = ?2)
-        ORDER BY t.start_date DESC, t.end_date DESC, t.id DESC LIMIT 1
-      ) AND NOT EXISTS(SELECT 1 FROM tournament_rosters registered WHERE registered.tournament_id = ?1 AND registered.player_id = r.player_id)
-      ORDER BY r.position`).bind(id, team.id)),
   ];
   try {
     const result = await db.batch(statements);

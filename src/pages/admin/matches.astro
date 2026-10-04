@@ -1,0 +1,8 @@
+---
+export const prerender=false;
+import { env } from 'cloudflare:workers';
+import { requireLocalAdmin } from '../../admin/tournaments.mjs';
+const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const id=Astro.url.searchParams.get('tournament');
+return Astro.redirect(id&&/^[a-z0-9-]{1,120}$/.test(id)?`/admin/tournaments/${id}/matches`:'/admin/tournaments',302);
+---
