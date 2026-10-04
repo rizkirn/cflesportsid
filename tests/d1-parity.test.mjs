@@ -51,12 +51,12 @@ test('seed imports inside a caller-owned transaction with immediate foreign key 
   } finally { db.close(); }
 });
 
-test('real seed matches every legacy statistic and all 127 registered players in all scopes', () => {
+test('real seed matches all statistics, 127 master players and the historical continuity segment', () => {
   const data = source(), db = imported(data);
   try {
     const report = compareStatistics(data, snapshot(db));
     assert.deepEqual(report.mismatches, []);
-    assert.deepEqual(report.scopes.map(s => [s.players, s.totals.matchesPlayed, s.totals.mapsPlayed]), [[127, 13, 39], [127, 13, 39], [127, 26, 78]]);
+    assert.deepEqual(report.scopes.map(s => [s.players, s.totals.matchesPlayed, s.totals.mapsPlayed]), [[128, 13, 39], [127, 13, 39], [128, 26, 78]]);
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM player_map_stats').get().n, 712);
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
   } finally { db.close(); }

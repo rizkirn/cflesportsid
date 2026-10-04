@@ -1,6 +1,7 @@
 ---
 interface Player {
   uid: string;
+  profileId?: string;
   ign: string;
   teamId: string | null;
   teamTag: string;
@@ -123,7 +124,7 @@ const leaders = [
                     />
 
                     <div class="featured-leader-info">
-                      <a href={`/players/${top.uid}`}>
+                      <a href={`/players/${top.profileId || top.uid}`}>
                         {top.ign}
                       </a>
 
@@ -144,7 +145,7 @@ const leaders = [
 
                 {ranked.map((p, i) => (
                   <a
-                    href={`/players/${p.uid}`}
+                    href={`/players/${p.profileId || p.uid}`}
                     class="leader-entry"
                   >
                     <span>{i + 1}</span>
@@ -319,7 +320,7 @@ const leaders = [
 
             link.textContent = p.ign;
             link.href =
-              `/players/${encodeURIComponent(p.uid)}`;
+              `/players/${encodeURIComponent(p.profileId || p.uid)}`;
 
             profile.querySelector('span')!.textContent =
               p.teamTag;

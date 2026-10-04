@@ -3,6 +3,8 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import cloudflare from '@astrojs/cloudflare';
 import { readdirSync } from 'node:fs';
+import { playerContinuitySplits } from './src/config/player-continuity.mjs';
+import { historicalPlayerKey } from './src/utils/player-continuity.mjs';
 
 const site = 'https://cflesportsid.pages.dev';
 const detailPages = [['matches', 'matches'], ['teams', 'teams'], ['players', 'players'], ['maps', 'maps'], ['tournaments', 'tournament']]
@@ -17,5 +19,5 @@ export default defineConfig({
   }),
   session: false,
   prefetch: true,
-  integrations: [sitemap({ customPages: detailPages, filter: url => !new URL(url).pathname.startsWith('/admin') })],
+  integrations: [sitemap({ customPages: [...detailPages, ...playerContinuitySplits.map(split => `${site}/players/${historicalPlayerKey(split)}/`)], filter: url => !new URL(url).pathname.startsWith('/admin') })],
 });

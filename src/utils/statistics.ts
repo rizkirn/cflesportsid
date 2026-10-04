@@ -1,4 +1,5 @@
 import type { CollectionEntry } from 'astro:content';
+import { statisticalPlayerKey } from './player-continuity.mjs';
 
 type Match = CollectionEntry<'matches'>;
 type Combat = { kills: number; deaths: number; assists: number };
@@ -64,15 +65,17 @@ export function calculateStatistics(matches: Match[]) {
         if (!teamMapMatches.has(key)) { team.matchesPlayed++; teamMapMatches.add(key); }
       }
       if (rd.mvp) {
-        ensure(players, rd.mvp, emptyStats).mvpCount++;
-        ensure(map.players, rd.mvp, emptyStats).mvpCount++;
+        const identity = statisticalPlayerKey(rd.mvp, m.tournamentId);
+        ensure(players, identity, emptyStats).mvpCount++;
+        ensure(map.players, identity, emptyStats).mvpCount++;
         map.mvpCount++; totals.mvpCount++;
       }
     }
     for (const id of matchMaps) maps.get(id)!.matchesPlayed++;
     for (const ps of m.resultType==='walkover'?[]:m.playerStats) {
       const rounds=ps.rounds.filter(r=>!m.roundDetails.some(rd=>rd.round_number===r.round_number&&rd.mode==='walkover'));
-      const player = ps.uid ? ensure(players, ps.uid, emptyStats) : undefined;
+      const identity = ps.uid ? statisticalPlayerKey(ps.uid, m.tournamentId) : undefined;
+      const player = identity ? ensure(players, identity, emptyStats) : undefined;
       if (player && rounds.length && !matchPlayers.has(ps.uid!)) {
         player.matchesPlayed++; outcome(player, ps.teamId, match); matchPlayers.add(ps.uid!);
       }
@@ -88,7 +91,7 @@ export function calculateStatistics(matches: Match[]) {
         add(map, r); map.playerRounds++;
         if (ps.teamId) add(ensure(map.teams, ps.teamId, emptyStats), r);
         if (ps.uid) {
-          const mapPlayer = ensure(map.players, ps.uid, emptyStats);
+          const mapPlayer = ensure(map.players, identity!, emptyStats);
           add(mapPlayer, r); mapPlayer.mapsPlayed++;
           const key = `${rd.mapId}:${ps.uid}`;
           if (!playerMapMatches.has(key)) { mapPlayer.matchesPlayed++; playerMapMatches.add(key); }

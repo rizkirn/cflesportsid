@@ -3,6 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
+import { statisticalProfiles } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
   emptyMapStats,
@@ -19,8 +20,8 @@ const stats =
   calculated.maps.get(map.id) ?? emptyMapStats();
 
 const players = new Map(
-  (await getCollection('players')).map(p => [
-    p.data.uid || p.id,
+  statisticalProfiles(await getCollection('players')).map(p => [
+    p.id,
     p
   ])
 );
@@ -197,7 +198,7 @@ const mapMatches = matches
               <img
                 src={
                   player?.data.avatar ||
-                  (uid ? `/players/${uid}.webp` : '/players/default.webp')
+                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
                 }
                 alt=""
                 width="54"
@@ -231,7 +232,7 @@ const mapMatches = matches
               <img
                 src={
                   player?.data.avatar ||
-                  (uid ? `/players/${uid}.webp` : '/players/default.webp')
+                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
                 }
                 alt=""
                 width="54"
@@ -265,7 +266,7 @@ const mapMatches = matches
               <img
                 src={
                   player?.data.avatar ||
-                  (uid ? `/players/${uid}.webp` : '/players/default.webp')
+                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
                 }
                 alt=""
                 width="54"

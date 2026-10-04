@@ -1,5 +1,18 @@
 # Frontend match reads through D1
 
+## Statistical continuity
+
+Same UID means continuous statistics by default; IGN changes do not reset them.
+Different UIDs are separate records, even with the same name. We do not identify
+or merge real-world people across accounts. Confirmed ownership transfers are
+configured in `src/config/player-continuity.mjs`: tournaments before the named
+boundary use the previous segment; the boundary and later tournaments use the
+current UID profile. Include every earlier tournament in `beforeTournaments`
+when adding a boundary. Match dates and IGN spelling never choose a segment.
+The previous segment has a stable `/players/<uid>--before-<tournament>/` URL.
+These are presentation/statistics keys, not master player IDs. Both D1 and JSON
+matches use the same resolver. Raw match rows and team attribution are unchanged.
+
 This phase follows `a91700d35517cba960c64dec06a6fa6716a894bb`. Only match reads move to D1. Teams, players, maps and tournaments still use the JSON content collections. The existing match collection remains the complete fallback and supplies metadata and fields absent from the current schema. No migrations, production writes or production reseed are needed. `src/utils/statistics.ts`, all templates/styles and browser interaction code retain their existing behavior.
 
 ## Consumer audit

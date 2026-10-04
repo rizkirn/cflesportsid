@@ -5,6 +5,7 @@ export const prerender = false;
 import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
+import { matchPlayerProfile } from '../../utils/player-continuity.mjs';
 import { getRoundName, getParticipantLabel } from '../../utils/tournament';
 
 import {
@@ -29,7 +30,7 @@ const teamsMap = new Map(
 );
 
 const playersMap = new Map(
-  allPlayers.map((player) => [player.data.uid, player])
+  allPlayers.map((player) => [player.data.uid, player.data.uid ? matchPlayerProfile(allPlayers, player.data.uid, m.data.tournamentId) : player])
 );
 
 const tournamentsMap = new Map(
@@ -107,6 +108,7 @@ const playerStats = (m.data.playerStats || [])
 
     return {
       uid: ps.uid,
+      ...(player && player.id !== ps.uid ? { profileId: player.id } : {}),
       avatar:
         player?.data.avatar ||
         (ps.uid

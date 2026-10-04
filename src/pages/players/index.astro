@@ -4,6 +4,7 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { calculateStatistics, emptyStats, kdRatio } from '../../utils/statistics';
+import { statisticalProfiles } from '../../utils/player-continuity.mjs';
 
 const allTeams = await getCollection('teams');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
@@ -11,9 +12,9 @@ const teamsMap = new Map(allTeams.map(t => [t.id, t]));
 const allMatches = await getFrontendMatches();
 const calculated = calculateStatistics(allMatches);
 
-const players = (await getCollection('players')).map(p => {
+const players = statisticalProfiles(await getCollection('players')).map(p => {
   const team = p.data.team ? teamsMap.get(p.data.team) : undefined;
-  const stats = calculated.players.get(p.data.uid || p.id) ?? emptyStats();
+  const stats = calculated.players.get(p.id) ?? emptyStats();
   const kd = kdRatio(stats);
 
   return {

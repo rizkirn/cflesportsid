@@ -1,11 +1,15 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as continuity from '../src/utils/player-continuity.mjs';
 
 export function loadLegacyStatistics() {
   const source = fs.readFileSync(new URL('../src/utils/statistics.ts', import.meta.url), 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-  const context = { exports: {} };
+  const context = { exports: {}, require: name => {
+    if (name === './player-continuity.mjs') return continuity;
+    throw new Error(`Unexpected statistics dependency: ${name}`);
+  } };
   vm.runInNewContext(code, context);
   return context.exports;
 }
@@ -56,8 +60,9 @@ export function calculateD1Statistics(db, tournamentId) {
       countOnce(teamMapMatches, JSON.stringify([rd.map_id, id]), m.id, team);
     }
     if (rd.mvp_player_id) {
-      ensure(result.players, rd.mvp_player_id).mvpCount++;
-      ensure(map.players, rd.mvp_player_id).mvpCount++;
+      const identity = continuity.statisticalPlayerKey(rd.mvp_player_id, m.tournament_id);
+      ensure(result.players, identity).mvpCount++;
+      ensure(map.players, identity).mvpCount++;
       map.mvpCount++; result.totals.mvpCount++;
     }
   }
@@ -65,7 +70,7 @@ export function calculateD1Statistics(db, tournamentId) {
   for (const e of db.player_match_entries) {
     if (!matches.has(e.match_id)) continue;
     entries.set(JSON.stringify([e.match_id, e.entry_index]), e);
-    if (e.uid_snapshot) ensure(result.players, e.uid_snapshot);
+    if (e.uid_snapshot) ensure(result.players, continuity.statisticalPlayerKey(e.uid_snapshot, matches.get(e.match_id).tournament_id));
     if (e.team_id) ensure(result.teams, e.team_id);
   }
   for (const r of [...db.player_round_stats].sort((a, b) => a.entry_index - b.entry_index || a.round_index - b.round_index)) {
@@ -76,9 +81,10 @@ export function calculateD1Statistics(db, tournamentId) {
     add(result.totals, r);
     if (e.team_id) add(ensure(result.teams, e.team_id), r);
     if (e.uid_snapshot) {
-      const player = ensure(result.players, e.uid_snapshot);
+      const identity = continuity.statisticalPlayerKey(e.uid_snapshot, m.tournament_id);
+      const player = ensure(result.players, identity);
       add(player, r); player.mapsPlayed++;
-      if (countOnce(playerMatches, e.uid_snapshot, m.id, player)) winLoss(player, e.team_id, m);
+      if (countOnce(playerMatches, identity, m.id, player)) winLoss(player, e.team_id, m);
     }
     const rd = r.map_number === null ? undefined : details.get(JSON.stringify([r.match_id, r.map_number]));
     if (!rd) { result.totals.unassignedPlayerRounds++; result.totals.unassignedMapKills += r.kills; continue; }
@@ -86,9 +92,10 @@ export function calculateD1Statistics(db, tournamentId) {
     add(map, r); map.playerRounds++;
     if (e.team_id) add(ensure(map.teams, e.team_id), r);
     if (e.uid_snapshot) {
-      const player = ensure(map.players, e.uid_snapshot);
+      const identity = continuity.statisticalPlayerKey(e.uid_snapshot, m.tournament_id);
+      const player = ensure(map.players, identity);
       add(player, r); player.mapsPlayed++;
-      countOnce(playerMapMatches, JSON.stringify([rd.map_id, e.uid_snapshot]), m.id, player);
+      countOnce(playerMapMatches, JSON.stringify([rd.map_id, identity]), m.id, player);
     }
   }
   return result;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync,spawn} from 'node:child_process';
-import {mkdirSync,mkdtempSync,readFileSync,writeFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,writeFileSync,readdirSync} from 'node:fs';
 import {resolve,join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {once} from 'node:events';
@@ -22,6 +22,39 @@ const normalize=html=>html.replace(/(<script\b[^>]*type="application\/json"[^>]*
 async function html(server,path,status=200){const response=await fetch(server.url+path);assert.equal(response.status,status,path);return response.text();}
 try{
  const d1=await start(d1Config,44324);const fallback=await start(fallbackConfig,44325);
+ const historicalId='1345266890--before-clash-for-glory-s2';
+ for(const server of [d1,fallback]){
+  const previous=await html(server,`/players/${historicalId}/`),current=await html(server,'/players/1345266890/');
+  assert.match(previous,/<h1\b[^>]*>KangDedy<\/h1>/);assert.match(current,/<h1\b[^>]*>KucayyPRMX<\/h1>/);
+  assert.match(previous,/>Historical<\/span>/);assert.ok(!previous.includes('Teammates'));
+  for(const id of ['m06','m10','m13']){assert.ok(previous.includes(`/matches/${id}`));assert.ok(!current.includes(`/matches/${id}`));}
+  for(const id of ['s2-m04','s2-m08']){assert.ok(current.includes(`/matches/${id}`));assert.ok(!previous.includes(`/matches/${id}`));}
+  assert.ok(previous.includes('/players/1345266890/'));assert.ok(current.includes(`/players/${historicalId}/`));
+  const board=await html(server,'/players/');
+  writeFileSync(join(scratch,'continuity-leaderboard.html'),board);
+  const rows=[...board.matchAll(/<tr\b(?:[^>"']|"[^"]*"|'[^']*')*>/g)].filter(r=>r[0].includes('data-kills')).map(r=>[r[0],...['kills','deaths','assists'].map(key=>r[0].match(new RegExp(`data-${key}="(\\d+)"`))[1])]);
+  assert.equal(rows.length,128);assert.deepEqual([1,2,3].map(i=>rows.reduce((n,r)=>n+Number(r[i]),0)),[5019,5010,2318]);
+  assert.match(board,/data-ign="kangdedy"[^>]*data-kills="70"[^>]*data-deaths="40"[^>]*data-assists="42"/);
+  assert.match(board,/data-ign="kucayyprmx"[^>]*data-kills="50"[^>]*data-deaths="16"[^>]*data-assists="24"/);
+  const oldMatch=await html(server,'/matches/m06/');assert.ok(oldMatch.includes('KangDedy'));assert.ok(oldMatch.includes(`/players/${historicalId}`));
+ }
+ if(process.env.CONTINUITY_BASELINE_DIR){
+  const baselineDir=resolve(process.env.CONTINUITY_BASELINE_DIR);
+  const original=JSON.parse(readFileSync(join(baselineDir,'server/wrangler.json'),'utf8'));
+  const baselineConfig=join(scratch,'baseline.json');
+  delete original.configPath;delete original.userConfigPath;delete original.previews;
+  writeFileSync(baselineConfig,JSON.stringify({...original,main:join(baselineDir,'server/entry.mjs'),assets:{...original.assets,directory:join(baselineDir,'client')},d1_databases:[]}));
+  const baseline=await start(baselineConfig,44329);
+  for(const file of readdirSync('src/data/teams').filter(f=>f.endsWith('.json'))){
+   const path=`/teams/${file.slice(0,-5)}/`;
+   assert.equal(await html(d1,path),await html(baseline,path),`Team Details must be byte-identical: ${path}`);
+  }
+  for(const file of readdirSync('src/data/tournaments').filter(f=>f.endsWith('.json'))){
+   const path=`/tournament/${file.slice(0,-5)}/`;
+   assert.equal(await html(d1,path),await html(baseline,path),`Tournament page must be byte-identical: ${path}`);
+  }
+  console.log('Continuity regression PASS: 19 Team Details and 2 tournament pages byte-identical to pre-change artifact.');
+ }
  const sitemap=await html(d1,'/sitemap-0.xml');assert.equal(sitemap,await html(fallback,'/sitemap-0.xml'));
  const paths=[...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(([,url])=>new URL(url).pathname);const assets=new Set();
  for(const path of paths){const live=await html(d1,path);const backup=await html(fallback,path);assert.equal(normalize(live),normalize(backup),`D1/fallback ${path}`);for(const [,asset]of live.matchAll(/(?:src|href)="(\/(?:_astro\/|_image\?)[^"]+)"/g))assets.add(asset.replaceAll('&amp;','&'));}

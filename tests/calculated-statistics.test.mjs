@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as continuity from '../src/utils/player-continuity.mjs';
 const source = fs.readFileSync(new URL('../src/utils/statistics.ts', import.meta.url), 'utf8');
 const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const context = { exports: {} }; vm.runInNewContext(code, context);
+const context = { exports: {}, require: () => continuity }; vm.runInNewContext(code, context);
 const { calculateStatistics, emptyStats, kdRatio, kdaRatio, getMapWinner } = context.exports;
 const stats = (kills, deaths, assists, round_number) => ({ kills, deaths, assists, ...(round_number ? { round_number } : {}) });
 test('full-match W/O preserves raw team series records and never creates combat or player records',()=>{

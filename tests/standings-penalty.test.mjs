@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import * as continuity from '../src/utils/player-continuity.mjs';
 
 function load(file, imports = {}) {
   const context = { exports: {}, require: name => imports[name] };
@@ -11,7 +12,7 @@ function load(file, imports = {}) {
   return context.exports;
 }
 const { getOverallStandings } = load('standings', {
-  './statistics': load('statistics'),
+  './statistics': load('statistics', { './player-continuity.mjs': continuity }),
   './tournament': load('tournament'),
 });
 

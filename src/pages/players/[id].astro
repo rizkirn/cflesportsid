@@ -3,6 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
+import { statisticalProfiles, statisticalPlayerKey, playerContinuitySplits, historicalPlayerKey } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
   emptyStats,
@@ -23,11 +24,15 @@ import {
   getRoundMapId,
 } from '../../utils/content';
 
-const player = (await getCollection('players')).find(entry => entry.id === Astro.params.id);
+const allPlayers = await getCollection('players');
+const profiles = statisticalProfiles(allPlayers);
+const player = profiles.find(entry => entry.id === Astro.params.id);
 if (!player) return new Response(null, { status: 404 });
+const split = playerContinuitySplits.find(s => s.uid === player.data.uid);
+const otherSegment = split ? profiles.find(p => p.id === (player.id === split.uid ? historicalPlayerKey(split) : split.uid)) : undefined;
+const isHistoricalSegment = Boolean(split && player.id !== split.uid);
 
 const allTeams = await getCollection('teams');
-const allPlayers = await getCollection('players');
 const allMatches = await getFrontendMatches();
 
 const teamsMap = new Map(
@@ -38,7 +43,7 @@ const team = player.data.team
   ? teamsMap.get(player.data.team)
   : undefined;
 
-const teammates = team
+const teammates = team && !isHistoricalSegment
   ? allPlayers.filter(
       p =>
         p.id !== player.id &&
@@ -55,7 +60,7 @@ const playerMatches = allMatches
       m.data.status === 'completed' &&
       m.data.playerStats &&
       m.data.playerStats.some(
-        ps => ps.uid === player.data.uid
+        ps => ps.uid && statisticalPlayerKey(ps.uid, m.data.tournamentId) === player.id
       )
   )
   .sort(
@@ -66,7 +71,7 @@ const playerMatches = allMatches
 
 const careerStats =
   calculateStatistics(allMatches).players.get(
-    player.data.uid || player.id
+    player.id
   ) ?? emptyStats();
 
 const matchesPlayed = careerStats.matchesPlayed;
@@ -142,6 +147,7 @@ playerMatches.forEach(m => {
         />
 
         <div class="profile-info">
+          {otherSegment && <p><a href={`/players/${otherSegment.id}/`}>View {otherSegment.data.ign} account history</a></p>}
 
           <p class="profile-kicker">
             {team ? (
@@ -164,7 +170,7 @@ playerMatches.forEach(m => {
                   : 'player-status-active'
               ]}
             >
-              {playerStatus === 'inactive'
+              {isHistoricalSegment ? 'Historical' : playerStatus === 'inactive'
                 ? 'Inactive'
                 : 'Active'}
             </span>
