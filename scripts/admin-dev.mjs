@@ -17,12 +17,15 @@ if (production?.database_name === 'cflesportsid' && production.database_id === s
 }
 mkdirSync('.generated', { recursive: true });
 const configPath = '.generated/admin-dev.json';
+const uat=JSON.parse(readFileSync('wrangler.uat.jsonc','utf8'));
+if(uat.r2_buckets?.length!==1||uat.r2_buckets[0].bucket_name!=='cflesportsid-assets-staging')throw new Error('Admin requires the approved staging asset bucket.');
 writeFileSync(configPath, JSON.stringify({
   name: 'cflesportsid-admin-dev',
   main: config.main,
   compatibility_date: config.compatibility_date,
   compatibility_flags: config.compatibility_flags,
   assets: { ...config.assets, directory: '../dist/client' },
+  r2_buckets: [{binding:'CFL_ASSETS',bucket_name:'cflesportsid-assets-staging',remote:!local}],
   d1_databases: ['DB', 'cflesportsid_staging'].map(binding => ({
     binding, database_name: 'cflesportsid-staging', database_id: staging.database_id,
     migrations_dir: '../migrations', remote: !local,

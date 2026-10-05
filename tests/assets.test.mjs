@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { execFileSync } from 'node:child_process';
+import { seedFixture } from './helpers/seed-fixture.mjs';
 import { assetFields, overlayAssetReferences, readAssetReferences, resolveAsset, thumbnailSource } from '../src/utils/assets.mjs';
 import { statisticalProfiles, matchPlayerProfile } from '../src/utils/player-continuity.mjs';
 import { checkData } from '../scripts/data-tools.mjs';
@@ -82,14 +82,13 @@ test('Randomizer and Veto receive resolved map sources from the same resolver', 
 });
 
 test('0009 upgrades populated 0008 additively; fresh 0001–0009 is FK clean and statistics unchanged', () => {
-  execFileSync(process.execPath,['scripts/generate-d1-seed.mjs'],{stdio:'pipe'});
   const db=new DatabaseSync(':memory:');
   try {
     db.exec('PRAGMA foreign_keys=ON');
     const migrations=readdirSync('migrations').filter(name=>/^000[1-9]_.*\.sql$/.test(name)).sort();
     assert.equal(migrations.length,9);
     for(const file of migrations.slice(0,8)) db.exec(readFileSync(`migrations/${file}`,'utf8'));
-    db.exec(readFileSync('.generated/seed-s1-s2.sql','utf8'));
+    db.exec(seedFixture());
     const tables=db.prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").all().map(row=>row.name);
     const before=Object.fromEntries(tables.map(table=>[table,db.prepare(`SELECT * FROM ${table}`).all()]));
     db.exec(readFileSync(`migrations/${migrations[8]}`,'utf8'));

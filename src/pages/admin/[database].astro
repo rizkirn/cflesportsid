@@ -2,6 +2,7 @@
 export const prerender=false;
 import {env} from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import AssetEditor from '../../components/admin/AssetEditor.astro';
 import MasterFields from '../../components/admin/MasterFields.astro';
 import {AdminError,requireLocalAdmin} from '../../admin/tournaments.mjs';
 import {masterDefinitions,masterRevision,readMasterForm,saveMaster} from '../../admin/master-data.mjs';
@@ -30,7 +31,7 @@ const safePreview=preview&&(preview.startsWith('/')&&!preview.startsWith('//')&&
  <form method="get" class="admin-toolbar"><label>Search {key==='players'?'UID / IGN':definition.title.toLowerCase()}<input type="search" name="q" value={q}/></label><button class="admin-outline" type="submit">Search</button></form>
  {filtered.length?<table class="admin-table operational-table"><thead><tr>{columns.map(column=><th>{label[column]}</th>)}</tr></thead><tbody>{filtered.map(row=><tr class:list={{'is-selected':selected?.id===row.id}}>{columns.map((column,index)=>{const value=column==='active'?row.active===1?'Active':'Inactive':column==='current_team_id'?teams.find(team=>team.id===row.current_team_id)?.name??'Unassigned':row[column]??'Not set';return <td data-label={label[column]}>{index===0||column==='current_ign'?<a href={`?selected=${encodeURIComponent(row.id)}&q=${encodeURIComponent(q)}`}>{value}</a>:value}</td>;})}</tr>)}</tbody></table>:<p class="admin-empty">No matching records.</p>}</section>
  {selected&&!creating&&<aside class="admin-inspector"><header class="admin-heading"><h2>{selected.current_ign??selected.name}</h2><a href={`/admin/${key}`}>Close</a></header>
- {safePreview&&<img class="master-asset-preview" src={preview} alt={`${selected.name} ${key==='maps'?'image':'logo'}`} loading="lazy"/>}
+ <AssetEditor category={key} entity={selected}/>
  <form method="post" class="admin-form" data-pending-form><input type="hidden" name="intent" value="edit"/><input type="hidden" name="revision" value={submitted?.revision??masterRevision(key,selected)}/><MasterFields definition={definition} key={key} values={values} teams={teams}/><button type="submit" class="admin-button">Save Changes</button><p class="admin-submit-status" role="status"></p></form>
  {history.length>0&&<section class="detail-section"><h3>Tournament History</h3><ul>{history.map(row=><li><strong>{row.tournament}</strong><br/>{row.team} · {row.ign}</li>)}</ul></section>}
  </aside>}
