@@ -6,7 +6,7 @@ import { readdirSync } from 'node:fs';
 import { playerContinuitySplits } from './src/config/player-continuity.mjs';
 import { historicalPlayerKey } from './src/utils/player-continuity.mjs';
 
-const site = 'https://cflesportsid.pages.dev';
+const site = 'https://cflesports.com';
 const detailPages = [['matches', 'matches'], ['teams', 'teams'], ['players', 'players'], ['maps', 'maps'], ['tournaments', 'tournament']]
   .flatMap(([collection, route]) => readdirSync(new URL(`./src/data/${collection}/`, import.meta.url))
     .filter(file => file.endsWith('.json'))
