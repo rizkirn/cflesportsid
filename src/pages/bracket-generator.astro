@@ -2,7 +2,8 @@
 import { getFrontendMatches } from '../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../data-access/frontend-assets';
+import { resolveAsset } from '../utils/assets.mjs';
 import '../styles/bracket-generator.css';
 
 const teams = (await getCollection('teams'))
@@ -12,17 +13,11 @@ const tournaments = await getCollection('tournaments');
 const matches = await getFrontendMatches();
 
 const localLogos = new Set(
-  Object.keys(import.meta.glob('/public/logos/*.webp'))
+  Object.keys(import.meta.glob('/public/logos/*.webp')).map(path => path.slice('/public'.length))
 );
 
 const teamLogo = (team: (typeof teams)[number]) => {
-  if (team.data.logo) return team.data.logo;
-
-  const logo = `/logos/${team.data.tag}.webp`;
-
-  return localLogos.has(`/public${logo}`)
-    ? logo
-    : '/logos/default.webp';
+  return resolveAsset('teams', team, {localFiles:team.data.logo ? undefined : localLogos}).src;
 };
 
 const catalog = {

@@ -4,7 +4,8 @@ import { getFrontendTeams } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import { getOverallStandings } from '../../utils/standings';
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset } from '../../utils/assets.mjs';
 import { calculateStatistics, emptyStats } from '../../utils/statistics';
 import { getRoundName, getRoundOrder } from '../../utils/tournament';
 import {
@@ -48,7 +49,7 @@ const sortedMatches = [...teamMatches].sort((a, b) => {
     <a class="back-to-teams" href="/teams"><span aria-hidden="true">←</span> All teams</a>
     
     <section class="profile-banner" aria-label="Team overview">
-      <div class="profile-identity"><img class="profile-image team-image" src={team.data.logo || `/logos/${team.data.tag}.webp`} alt={team.data.name} width="160" height="160" onerror="this.onerror=null; this.src='/logos/default.webp'" />
+      <div class="profile-identity"><img class="profile-image team-image" src={resolveAsset('teams', team).src} alt={team.data.name} width="160" height="160" onerror="this.onerror=null; this.src='/logos/default.webp'" />
         <div><p class="profile-kicker">{team.data.region === 'ID' ? 'Indonesia' : team.data.region} · Crossfire Legends</p><h1>{team.data.name}</h1><p class="profile-subtitle">{team.data.tag}</p></div>
       </div>
       <dl class="profile-metrics"><div><dt>Overall standing</dt><dd>#{currentPosition}</dd></div><div><dt>Matches played</dt><dd>{matchesPlayed}</dd></div><div><dt>Wins</dt><dd>{wins}</dd></div><div><dt>Losses</dt><dd>{losses}</dd></div></dl>
@@ -84,10 +85,7 @@ const sortedMatches = [...teamMatches].sort((a, b) => {
           <img
             class="avatar"
             src={
-              player.data.avatar ||
-              (player.data.uid
-                ? `/players/${player.data.uid}.webp`
-                : '/players/default.webp')
+              resolveAsset('players', player).src
             }
             alt={`${player.data.ign} photo`}
             loading="lazy"

@@ -1,5 +1,6 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { env } from 'cloudflare:workers';
+import { overlayAssetReferences } from '../utils/assets.mjs';
 
 export async function getFrontendTeams(): Promise<CollectionEntry<'teams'>[]> {
   const legacy = await getCollection('teams');
@@ -7,10 +8,10 @@ export async function getFrontendTeams(): Promise<CollectionEntry<'teams'>[]> {
     const result = await env.DB.prepare('SELECT * FROM teams ORDER BY id').all<any>();
     if (!result.success) throw new Error('Team read failed');
     const ids = new Set(legacy.map(t => t.id));
-    return [...legacy, ...result.results.filter(t => !ids.has(t.id)).map(t => ({ id: t.id, collection:'teams' as const, data: {
+    return overlayAssetReferences([...legacy, ...result.results.filter(t => !ids.has(t.id)).map(t => ({ id: t.id, collection:'teams' as const, data: {
       name: t.name, tag: t.tag, region: t.region, ...(t.color ? { color:t.color } : {}), ...(t.logo ? { logo:t.logo } : {}),
       placementPoints: 0, penalties: [], players: [], stats: { wins:0, losses:0, draws:0, matchesPlayed:0 },
-    } }))];
+    } }))], 'teams', result.results);
   } catch (error) {
     console.warn('[teams] JSON fallback:', error instanceof Error ? error.message : error);
     return legacy;
@@ -27,7 +28,7 @@ export async function getFrontendTournaments(): Promise<CollectionEntry<'tournam
     if (results.some(r => !r.success)) throw new Error('Tournament read failed');
     const [tournaments, stages, rounds, byes, teams] = results.map(r => r.results);
     const ids = new Set(legacy.map(t => t.id));
-    return [...legacy, ...tournaments.filter(t => !ids.has(t.id) && stages.some(s => s.tournament_id === t.id)).map(t => ({ id:t.id, collection:'tournaments' as const, data: {
+    return overlayAssetReferences([...legacy, ...tournaments.filter(t => !ids.has(t.id) && stages.some(s => s.tournament_id === t.id)).map(t => ({ id:t.id, collection:'tournaments' as const, data: {
       name:t.name, game:t.game, region:t.region, startDate:t.start_date, endDate:t.end_date, status:t.status, format:t.format,
       ...(t.winner_team_id ? { winner:t.winner_team_id } : {}),
       teams:teams.filter(team => team.tournament_id === t.id).map(team => team.team_id),
@@ -36,7 +37,7 @@ export async function getFrontendTournaments(): Promise<CollectionEntry<'tournam
         rounds:rounds.filter(r => r.tournament_id === t.id && r.stage_id === s.id).map(r => ({id:r.id,name:r.name,order:r.sort_order,...(r.placement ? {placement:r.placement} : {})})),
         byes:byes.filter(b => b.tournament_id === t.id && b.stage_id === s.id).map(b => ({id:b.id,roundId:b.round_id,slot:b.slot,teamId:b.team_id})),
       })),
-    } }))];
+    } }))], 'tournaments', tournaments);
   } catch (error) {
     console.warn('[tournaments] JSON fallback:', error instanceof Error ? error.message : error);
     return legacy;

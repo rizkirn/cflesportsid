@@ -2,7 +2,8 @@
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset } from '../../utils/assets.mjs';
 import { statisticalProfiles, statisticalPlayerKey, playerContinuitySplits, historicalPlayerKey } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
@@ -135,10 +136,7 @@ playerMatches.forEach(m => {
         <img
           class="profile-image"
           src={
-            player.data.avatar ||
-            (player.data.uid
-              ? `/players/${player.data.uid}.webp`
-              : '/players/default.webp')
+            resolveAsset('players', player).src
           }
           alt={`${player.data.ign} photo`}
           width="160"
@@ -602,10 +600,7 @@ playerMatches.forEach(m => {
               <img
                 class="avatar"
                 src={
-                  p.data.avatar ||
-                  (p.data.uid
-                    ? `/players/${p.data.uid}.webp`
-                    : '/players/default.webp')
+                  resolveAsset('players', p).src
                 }
                 alt={`${p.data.ign} photo`}
                 width="40"

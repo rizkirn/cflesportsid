@@ -2,7 +2,8 @@
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset } from '../../utils/assets.mjs';
 import { calculateStatistics, emptyStats, kdRatio } from '../../utils/statistics';
 import { statisticalProfiles } from '../../utils/player-continuity.mjs';
 
@@ -21,10 +22,10 @@ const players = statisticalProfiles(await getCollection('players')).map(p => {
     id: p.id,
     uid: p.data.uid,
     ign: p.data.ign,
-    avatar: p.data.avatar || (p.data.uid ? `/players/${p.data.uid}.webp` : '/players/default.webp'),
+    avatar: resolveAsset('players', p).src,
     teamName: team?.data.name || '—',
     teamId: team?.id || '',
-    teamLogo: team?.data.logo || (team?.data.tag ? `/logos/${team.data.tag}.webp` : ''),
+    teamLogo: resolveAsset('teams', team).src,
     teamColor: team?.data.color || '#777B82',
     kills: stats.kills,
     deaths: stats.deaths,

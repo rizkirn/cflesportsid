@@ -3,6 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
+import { resolveAsset } from '../../utils/assets.mjs';
 import { getCollection } from 'astro:content';
 import { getMatchRound } from '../../utils/tournament';
 import {
@@ -14,10 +15,7 @@ const matches = await getFrontendMatches();
 const teams = await getFrontendTeams();
 const allTournaments = await getFrontendTournaments();
 
-const tournamentPosters: Record<string, string> = {
-  'clash-for-glory-s1': '/tournaments/clash-for-glory-s1.webp',
-  'clash-for-glory-s2': '/tournaments/clash-for-glory-s2.webp',
-};
+const localPosters = new Set(Object.keys(import.meta.glob('/public/tournaments/*.webp')).map(path => path.slice('/public'.length)));
 
 const formatDate = (date: string | null) => {
   if (!date) return null;
@@ -106,7 +104,7 @@ const tournaments = allTournaments.map((tournament) => {
     season,
     month,
     winner,
-    poster: tournamentPosters[tournament.id] ?? null,
+    poster: resolveAsset('tournaments', tournament, {localFiles:localPosters}).src,
     matchCount: tMatches.length,
   };
 });

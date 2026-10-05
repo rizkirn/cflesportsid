@@ -2,6 +2,7 @@
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
+import { resolveAsset } from '../../utils/assets.mjs';
 import { getCollection } from 'astro:content';
 import { getRoundName, getRoundOrder, getParticipantLabel } from '../../utils/tournament';
 import {
@@ -152,7 +153,7 @@ const rounds = [...new Set(matches.map(m => getRoundName(m, tournamentsMap)))];
               <div class="match-team">
                 <div class="team-logo-wrap">
                   <img
-                    src={t1?.data.logo || `/logos/${team1Tag}.webp`}
+                    src={resolveAsset('teams', t1 ?? {tag:team1Tag}).src}
                     alt={team1Name}
                     loading="lazy"
                     onerror="this.onerror=null;this.src='/logos/default.webp'"
@@ -182,7 +183,7 @@ const rounds = [...new Set(matches.map(m => getRoundName(m, tournamentsMap)))];
               <div class="match-team">
                 <div class="team-logo-wrap">
                   <img
-                    src={t2?.data.logo || `/logos/${team2Tag}.webp`}
+                    src={resolveAsset('teams', t2 ?? {tag:team2Tag}).src}
                     alt={team2Name}
                     loading="lazy"
                     onerror="this.onerror=null;this.src='/logos/default.webp'"

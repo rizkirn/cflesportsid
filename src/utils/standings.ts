@@ -1,6 +1,7 @@
 import type { CollectionEntry } from 'astro:content';
 import { calculateStatistics } from './statistics';
 import { getMatchRound } from './tournament';
+import { resolveAsset } from './assets.mjs';
 
 export function getOverallStandings(teams: CollectionEntry<'teams'>[], matches: CollectionEntry<'matches'>[], tournaments: CollectionEntry<'tournaments'>[]) {
   const statistics = calculateStatistics(matches);
@@ -19,6 +20,6 @@ export function getOverallStandings(teams: CollectionEntry<'teams'>[], matches: 
     const killPoints = statistics.teams.get(team.id)?.kills ?? 0;
     const penalties = team.data.penalties ?? [];
     const penaltyPoints = penalties.reduce((sum, penalty) => sum + penalty.points, 0);
-    return { id: team.id, name: team.data.name, tag: team.data.tag, logo: team.data.logo || `/logos/${team.data.tag}.webp`, killPoints, placementPoints, penalties, penaltyPoints, totalScore: killPoints + placementPoints - penaltyPoints, isTournamentWinner };
+    return { id: team.id, name: team.data.name, tag: team.data.tag, logo: resolveAsset('teams', team).src, killPoints, placementPoints, penalties, penaltyPoints, totalScore: killPoints + placementPoints - penaltyPoints, isTournamentWinner };
   }).sort((a, b) => b.totalScore - a.totalScore);
 }

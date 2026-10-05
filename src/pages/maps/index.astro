@@ -2,7 +2,8 @@
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset } from '../../utils/assets.mjs';
 import {
   calculateStatistics,
   emptyMapStats
@@ -54,7 +55,7 @@ const maps = (await getCollection('maps'))
           >
             <div class="map-thumbnail">
               <img
-                src={`/maps/${map.id}.webp`}
+                src={resolveAsset('maps', map).src}
                 alt=""
                 width="800"
                 height="360"

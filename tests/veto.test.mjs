@@ -59,6 +59,7 @@ test('switching matches cancels a pending wheel and starts a fresh configured se
   const matches = ['m01', 'm02'].map(id => ({ id, veto, tournament: 'Test', status: 'completed', team1: { id: 'a', name: 'A', tag: 'A' }, team2: { id: 'b', name: 'B', tag: 'B' } }));
   el('match-data').textContent = JSON.stringify(matches);
   el('official-veto').textContent='false';
+  el('map-images').textContent=JSON.stringify(Object.fromEntries(veto.maps.map(map=>[map.id,`/maps/${map.id}.webp`])));
   const pending = new Map(); let timer = 0;
   const script = fs.readFileSync('src/components/tools/VetoTool.astro', 'utf8').split('<script>')[1].split('</script>')[0].replace(/^\s*import .*;\s*$/gm,'');
   const sandbox = {applyVetoAction,remainingVetoMaps,resolveVetoResult, document: { getElementById: el, querySelectorAll: () => [] }, location: { search: '' }, URLSearchParams, setInterval: () => 1, clearInterval() {}, setTimeout(fn) { pending.set(++timer, fn); return timer; }, clearTimeout(id) { pending.delete(id); }, requestAnimationFrame(fn) { fn(); } };
