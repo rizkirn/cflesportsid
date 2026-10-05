@@ -4,7 +4,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 import economySettings from '../../data/veto/economy.json';
 import scrimSettings from '../../data/veto/scrim.json';
 import { resolveVeto } from '../../utils/veto';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import type {MapContext} from '../../admin/map-assignments.mjs';
 interface Props {official?:MapContext|null;}
 const {official=null}=Astro.props;
@@ -23,6 +23,7 @@ const teamsMap = await getTeamMap();
 const tournamentsMap = await getTournamentMap();
 const mapsMap = await getMapMap();
 const mapImages = Object.fromEntries([...mapsMap].map(([id, map]) => [id, resolveAsset('maps', map).src]));
+const mapImageErrors = Object.fromEntries([...mapsMap].map(([id, map]) => [id, assetErrorHandler('maps',map)]));
 
 const vetoConfigs = new Map();
 
@@ -1464,6 +1465,7 @@ if(official){
 
 <script type="application/json" id="official-veto" set:html={JSON.stringify(!!official)} />
 <script type="application/json" id="map-images" set:html={JSON.stringify(mapImages).replace(/</g, '\\u003c')} />
+<script type="application/json" id="map-image-errors" set:html={JSON.stringify(mapImageErrors).replace(/</g, '\\u003c')} />
 <script>
  import {applyVetoAction,remainingVetoMaps,resolveVetoResult} from '../../utils/veto-engine.mjs';
   (function() {
@@ -1473,6 +1475,7 @@ if(official){
     if(!document.getElementById('match-data'))return;
     const official=JSON.parse(document.getElementById('official-veto').textContent);
     const mapImages=JSON.parse(document.getElementById('map-images').textContent);
+    const mapImageErrors=JSON.parse(document.getElementById('map-image-errors').textContent);
     const preview=(maps,actions=[])=>{
       if(official)document.dispatchEvent(new CustomEvent('cfl-map-preview',{detail:{maps,actions}}));
     };
@@ -2274,7 +2277,7 @@ if(official){
               }
               aria-label="${escapeHTML(mapName(map))} ${statusLabel || 'available'}"
             >
-              <img class="veto-map-image" src="${escapeHTML(mapImages[map] || '/maps/placeholder.svg')}" alt="" loading="lazy" onerror="this.onerror=null;this.src='/maps/placeholder.svg'" />
+              <img class="veto-map-image" src="${escapeHTML(mapImages[map] || '/maps/placeholder.svg')}" alt="" loading="lazy" onerror="${escapeHTML(mapImageErrors[map] || 'this.onerror=null;this.hidden=true')}" />
               <div class="veto-map-name">
                 ${escapeHTML(mapName(map))}
               </div>

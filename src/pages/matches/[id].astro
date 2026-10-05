@@ -5,7 +5,7 @@ export const prerender = false;
 import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { matchPlayerProfile } from '../../utils/player-continuity.mjs';
 import { getRoundName, getParticipantLabel } from '../../utils/tournament';
 
@@ -111,6 +111,7 @@ const playerStats = (m.data.playerStats || [])
       uid: ps.uid,
       ...(player && player.id !== ps.uid ? { profileId: player.id } : {}),
       avatar: resolveAsset('players', player ?? {data:{uid:ps.uid}}).src,
+      avatarLegacy: resolveAsset('players', player ?? {data:{uid:ps.uid}}).legacy,
 
       ign:
         ps.playerId ? (ps.ign || ps.uid) : player
@@ -257,7 +258,7 @@ const roundMVPs =
             }
             alt={team1Name}
             class="team-logo-large"
-            onerror="this.onerror=null; this.src='/logos/default.webp'"
+            onerror={assetErrorHandler('teams',t1??{tag:team1Tag})}
           />
 
           <a
@@ -297,7 +298,7 @@ const roundMVPs =
             }
             alt={team2Name}
             class="team-logo-large"
-            onerror="this.onerror=null; this.src='/logos/default.webp'"
+            onerror={assetErrorHandler('teams',t2??{tag:team2Tag})}
           />
 
           <a
@@ -460,7 +461,7 @@ const roundMVPs =
                                   src={mapId ? resolveAsset('maps', mapsMap.get(mapId) ?? {id:mapId}).src : '/maps/placeholder.svg'}
                                   alt={mapName}
                                   loading="lazy"
-                                  onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+                                  onerror={assetErrorHandler('maps',mapsMap.get(mapId)??{id:mapId})}
                                 />
 
                                 <h3 class="map-mvp-overlay">
@@ -483,7 +484,7 @@ const roundMVPs =
                                       width="100"
                                       height="110"
                                       loading="lazy"
-                                      onerror="this.onerror=null;this.src='/players/default.webp'"
+                                      onerror={assetErrorHandler('players',playersMap.get(mvp.uid)??{data:{uid:mvp.uid}})}
                                     />
 
                                     <div>

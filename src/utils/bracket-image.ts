@@ -1,6 +1,6 @@
 import type { GeneratedBracket } from './bracket-generator';
 
-type Team = { name: string; color: string; logo: string };
+type Team = { name: string; color: string; logo: string; logoLegacy?: string };
 
 function loadLogo(src: string): Promise<HTMLImageElement | null> {
   return new Promise(resolve => {
@@ -18,7 +18,7 @@ export async function createBracketImage(bracket: GeneratedBracket, teams: Map<s
   const fallback = await loadLogo('/logos/default.webp');
   const logos = new Map(await Promise.all(teamIds.map(async id => {
     const team = teams.get(id);
-    return [id, team ? (await loadLogo(team.logo)) ?? fallback : null] as const;
+    return [id, team ? (await loadLogo(team.logo)) ?? (team.logoLegacy ? await loadLogo(team.logoLegacy) : null) ?? fallback : null] as const;
   })));
   const stage = bracket.tournament.data.stages[0];
   const rounds = stage.rounds.filter(round => round.placement !== 3);

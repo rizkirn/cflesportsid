@@ -3,7 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { statisticalProfiles, statisticalPlayerKey, playerContinuitySplits, historicalPlayerKey } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
@@ -141,7 +141,7 @@ playerMatches.forEach(m => {
           alt={`${player.data.ign} photo`}
           width="160"
           height="160"
-          onerror="this.onerror=null;this.src='/players/default.webp'"
+          onerror={assetErrorHandler('players',player)}
         />
 
         <div class="profile-info">
@@ -606,7 +606,7 @@ playerMatches.forEach(m => {
                 width="40"
                 height="40"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',p)}
               />
 
               <div class="roster-card-info">

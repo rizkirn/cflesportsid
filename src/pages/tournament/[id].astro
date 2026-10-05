@@ -4,7 +4,7 @@ import { getFrontendTeams, getFrontendTournaments } from '../../data-access/fron
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { calculateStatistics } from '../../utils/statistics';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { getParticipantLabel, getSourceNode, resolveSourceTeam, validateTournament } from '../../utils/tournament';
 
@@ -145,7 +145,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                   src={resolveAsset('teams', team).src}
                                   alt={`${team.data.name} logo`}
                                   loading="lazy"
-                                  onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                  onerror={assetErrorHandler('teams',team)}
                                 />
                               )}
                               <span class="bracket-team-name">{team?.data.name ?? entry.bye.teamId}</span>
@@ -185,7 +185,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 src={resolveAsset('teams', team1).src}
                                 alt={`${team1.data.name} logo`}
                                 loading="lazy"
-                                onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                onerror={assetErrorHandler('teams',team1)}
                               />
                             )}
                             <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
@@ -200,7 +200,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                 src={resolveAsset('teams', team2).src}
                                 alt={`${team2.data.name} logo`}
                                 loading="lazy"
-                                onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                onerror={assetErrorHandler('teams',team2)}
                               />
                             )}
                             <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
@@ -243,7 +243,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                     src={resolveAsset('teams', team1).src}
                                     alt={`${team1.data.name} logo`}
                                     loading="lazy"
-                                    onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                    onerror={assetErrorHandler('teams',team1)}
                                   />
                                 )}
                                 <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
@@ -259,7 +259,7 @@ function bracketRow(slot: number, roundIndex: number) {
                                     src={resolveAsset('teams', team2).src}
                                     alt={`${team2.data.name} logo`}
                                     loading="lazy"
-                                    onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                    onerror={assetErrorHandler('teams',team2)}
                                   />
                                 )}
                                 <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>

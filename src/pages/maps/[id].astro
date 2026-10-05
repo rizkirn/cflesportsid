@@ -3,7 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { statisticalProfiles } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
@@ -125,7 +125,7 @@ const mapMatches = matches
         alt={`${map.data.name} map`}
         width="1600"
         height="720"
-        onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+        onerror={assetErrorHandler('maps',map)}
       />
 
       <div class="map-hero-overlay"></div>
@@ -204,7 +204,7 @@ const mapMatches = matches
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>
@@ -237,7 +237,7 @@ const mapMatches = matches
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>
@@ -270,7 +270,7 @@ const mapMatches = matches
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>

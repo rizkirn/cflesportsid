@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { checkData } from '../scripts/data-tools.mjs';
+import { createHash } from 'node:crypto';
 
 const root=process.cwd();
 mkdirSync('.generated',{recursive:true});
@@ -16,23 +17,27 @@ const servers=[];
 const built=JSON.parse(readFileSync('dist/server/wrangler.json','utf8'));
 const config={...built,name:'r2-assets-local-rehearsal',main:resolve('dist/server',built.main),
   assets:{...built.assets,directory:resolve('dist/client')},routes:[],
-  d1_databases:[{binding:'DB',database_name:'r2-assets-local',database_id:'00000000-0000-0000-0000-000000000009',migrations_dir:resolve('migrations')}]};
+  d1_databases:[{binding:'DB',database_name:'r2-assets-local',database_id:'00000000-0000-0000-0000-000000000009',migrations_dir:resolve('migrations')}],
+  r2_buckets:[{binding:'CFL_ASSETS',bucket_name:'r2-assets-local'}]};
 delete config.configPath;delete config.userConfigPath;
 const configPath=join(scratch,'local.json');
 writeFileSync(configPath,JSON.stringify(config));
 const backupPath=join(scratch,'fallback.json');
-writeFileSync(backupPath,JSON.stringify({...config,d1_databases:[]}));
+  writeFileSync(backupPath,JSON.stringify({...config,d1_databases:[],r2_buckets:[]}));
 const sql=command=>run([wrangler,'d1','execute','r2-assets-local','--config',configPath,'--local','--persist-to',store,'--command',command]);
 async function start(path,port){
-  const child=spawn(process.execPath,[wrangler,'dev','--config',path,'--local','--persist-to',store,'--ip','127.0.0.1','--port',String(port)],{cwd:root,env,stdio:['ignore','pipe','pipe']});
-  servers.push(child);let logs='';child.stdout.on('data',data=>logs+=data);child.stderr.on('data',data=>logs+=data);
+  const logPath=join(scratch,`worker-${port}.log`);
+  const logFd=openSync(logPath,'a');
+  const child=spawn(process.execPath,[wrangler,'dev','--config',path,'--local','--persist-to',store,'--ip','127.0.0.1','--port',String(port)],{cwd:root,env,stdio:['ignore',logFd,logFd]});
+  servers.push(child);
+  const logs=()=>readFileSync(logPath,'utf8');
   const base=`http://127.0.0.1:${port}`;
   for(let i=0;i<150;i++){
-    if(child.exitCode!==null)throw Error(logs);
+    if(child.exitCode!==null)throw Error(logs());
     try{if((await fetch(base+'/robots.txt')).ok)return base;}catch{}
     await delay(100);
   }
-  throw Error(logs);
+  throw Error(logs());
 }
 async function html(base,path,status=200){const response=await fetch(base+path);assert.equal(response.status,status,path);return response.text();}
 function canonical(value){
@@ -89,13 +94,40 @@ try {
   sql('ALTER TABLE teams DROP COLUMN logo_asset_key; ALTER TABLE players DROP COLUMN photo_asset_key; ALTER TABLE maps DROP COLUMN image_asset_key; ALTER TABLE tournaments DROP COLUMN poster_asset_key;');
   for(const [path,page] of original)assert.equal(await html(live,path),page,`Pre-0009 fallback changed: ${path}`);
   sql(readFileSync('migrations/0009_r2_asset_references.sql','utf8'));
+  const images=[
+    {table:'teams',id:'familia-nova',kind:'logo',field:'logo_asset_key',file:'public/logos/FNOV.webp',page:'/teams/familia-nova/'},
+    {table:'players',id:'1347741365',kind:'avatar',field:'photo_asset_key',file:'public/players/1347741365.webp',page:'/players/1347741365/'},
+    {table:'maps',id:'island',kind:'cover',field:'image_asset_key',file:'public/maps/island.webp',page:'/maps/island/'},
+    {table:'tournaments',id:'clash-for-glory-s2',kind:'poster',field:'poster_asset_key',file:'public/tournaments/clash-for-glory-s2.webp',page:'/tournament/'},
+  ];
+  for(const image of images){
+    const bytes=readFileSync(image.file),hash=createHash('sha256').update(bytes).digest('hex');
+    image.key=`${image.table}/${image.id}/${image.kind}/${hash}.webp`;
+    run([wrangler,'r2','object','put',`r2-assets-local/${image.key}`,'--config',configPath,'--local','--persist-to',store,'--file',image.file,'--content-type','image/webp']);
+    sql(`UPDATE ${image.table} SET ${image.field}='${image.key}' WHERE ${image.table==='players'?'uid':'id'}='${image.id}'`);
+    const response=await fetch(live+'/media/'+image.key);
+    assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),'image/webp');assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.ok(response.headers.get('etag'));assert.match(response.headers.get('cache-control'),/max-age=31536000, immutable/);
+    assert.equal(createHash('sha256').update(new Uint8Array(await response.arrayBuffer())).digest('hex'),hash);
+    const head=await fetch(live+'/media/'+image.key,{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
+    assert.ok((await html(live,image.page)).includes('/media/'+image.key),image.page);
+  }
+  const missingKey=`maps/island/cover/${'0'.repeat(64)}.webp`;
+  const missing=await fetch(live+'/media/'+missingKey);assert.equal(missing.status,404);assert.equal(missing.headers.get('cache-control'),'no-store');
+  for(const path of ['/media/random/path.webp','/media/teams//logo/file.webp','/media/teams/x/logo/file.svg','/media/teams/x/logo/file.html','/media/%252e%252e/x','/media/../__invalid__','/media/%2e%2e/__invalid__']){
+    const response=await fetch(live+path);assert.ok(response.status>=400&&response.status<500,path);assert.doesNotMatch(response.headers.get('cache-control')??'',/immutable/);
+  }
+  for(const method of ['POST','PUT','PATCH','DELETE'])assert.equal((await fetch(live+'/media/'+images[0].key,{method,headers:{origin:live}})).status,405);
+  assert.ok((await html(live,'/map-randomizer/')).includes('/media/'+images[2].key));
+  assert.ok((await html(live,'/veto/')).includes('/media/'+images[2].key));
+  assert.ok((await html(live,'/tournament/')).includes('/tournaments/clash-for-glory-s1.webp'));
+  assert.doesNotMatch(await html(live,'/players/1345266890--before-clash-for-glory-s2/'),/\/media\/players\/1345266890/);
   const tables=['players','teams','maps','tournaments','matches','match_maps','player_match_entries','player_round_stats'];
   const response=JSON.parse(run([wrangler,'d1','execute','r2-assets-local','--config',configPath,'--local','--persist-to',store,'--json','--command',tables.map(table=>`SELECT * FROM ${table}`).join(';')]));
   const {compareStatistics}=await import('../scripts/d1-parity.mjs');
   const report=compareStatistics(data,Object.fromEntries(tables.map((table,index)=>[table,response[index].results])));
   assert.deepEqual(report.mismatches,[]);
   writeFileSync(join(scratch,'report.json'),JSON.stringify({pages:paths.length,assets:assets.size,parity:report},null,2));
-  console.log(`R2-A public regression passed: ${paths.length} pages with NULL keys, populated keys, pre-0009 schema and missing DB binding; all 19 team pages and S1/S2 unchanged; ${assets.size} optimized assets; admin 403; canonical unchanged; D1 parity zero mismatches. ${scratch}`);
+  console.log(`R2 public regression passed: ${paths.length} pages with NULL/invalid keys, pre-0009 schema and missing DB binding; all 19 team pages and S1/S2 unchanged across fallback states; four real local R2 images/GET/HEAD/MIME/hash/cache/ETag plus security and official tools passed; ${assets.size} optimized assets; admin 403; canonical unchanged; D1 parity zero mismatches. ${scratch}`);
 } finally {
   for(const child of servers)child.kill('SIGTERM');
 }

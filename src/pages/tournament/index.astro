@@ -3,7 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, imageFallbackHandler } from '../../utils/assets.mjs';
 import { getCollection } from 'astro:content';
 import { getMatchRound } from '../../utils/tournament';
 import {
@@ -105,6 +105,7 @@ const tournaments = allTournaments.map((tournament) => {
     month,
     winner,
     poster: resolveAsset('tournaments', tournament, {localFiles:localPosters}).src,
+    posterLegacy: resolveAsset('tournaments', tournament, {localFiles:localPosters}).legacy,
     matchCount: tMatches.length,
   };
 });
@@ -176,7 +177,9 @@ tournaments.sort((a, b) => {
                   loading="lazy"
                   width="768"
                   height="1024"
+                  onerror={imageFallbackHandler(tournament.poster,[tournament.posterLegacy])+";if(this.hidden)this.nextElementSibling.hidden=false"}
                 />
+                <div class="poster-placeholder" hidden><span>{tournament.name}</span></div>
               ) : (
                 <div class="poster-placeholder">
                   <span>{tournament.name}</span>
@@ -380,6 +383,8 @@ tournaments.sort((a, b) => {
   .tourney-card:hover .tourney-poster img {
     transform:scale(1.015);
   }
+
+  .poster-placeholder[hidden] { display:none; }
 
   .poster-placeholder {
     display:flex;

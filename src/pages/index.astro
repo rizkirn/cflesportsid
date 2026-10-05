@@ -5,7 +5,7 @@ import Thumbnail from '../components/Thumbnail.astro';
 import StandingPenalty from '../components/StandingPenalty.astro';
 import Layout from '../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../data-access/frontend-assets';
-import { resolveAsset } from '../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../utils/assets.mjs';
 import { getOverallStandings } from '../utils/standings';
 import { calculateStatistics, emptyStats } from '../utils/statistics';
 import { statisticalProfiles } from '../utils/player-continuity.mjs';
@@ -311,7 +311,7 @@ const qualificationPercent = Math.min(
         <div class="qualification-summary">
           {qualifiedTeams.map(team => (
             <a class="qualification-team" href={`/teams/${team.id}`}>
-              <Thumbnail src={team.logo} fallback="/logos/default.webp" width={40} height="40" alt="" />
+              <Thumbnail src={team.logo} onerror={team.logoError} fallback="/logos/default.webp" width={40} height="40" alt="" />
               <span><strong>{team.name}</strong><small>Qualified</small></span>
             </a>
           ))}
@@ -496,6 +496,7 @@ const qualificationPercent = Math.min(
                       <a href={`/teams/${team.id}`}>
                         <Thumbnail
                           src={team.logo}
+                          onerror={team.logoError}
                           fallback="/logos/default.webp"
                           width={32}
                           height="32"
@@ -577,6 +578,7 @@ const qualificationPercent = Math.min(
                             <a href={`/teams/${team.id}`}>
                               <Thumbnail
                                 src={team.logo}
+                                onerror={team.logoError}
                                 fallback="/logos/default.webp"
                                 width={32}
                                 height="32"
@@ -680,6 +682,7 @@ const qualificationPercent = Math.min(
                           resolveAsset('players', player).src
                         }
                         fallback="/players/default.webp"
+                        onerror={assetErrorHandler('players',player)}
                         width={42}
                         height="48"
                         alt=""
@@ -745,6 +748,7 @@ const qualificationPercent = Math.min(
                     src={teamLogo(
                       getMatchTeam1Id(match)
                     )}
+                    onerror={assetErrorHandler('teams',teamById.get(getMatchTeam1Id(match)??''))}
                     width={24}
                     height="24"
                     alt=""
@@ -774,6 +778,7 @@ const qualificationPercent = Math.min(
                     src={teamLogo(
                       getMatchTeam2Id(match)
                     )}
+                    onerror={assetErrorHandler('teams',teamById.get(getMatchTeam2Id(match)??''))}
                     width={24}
                     height="24"
                     alt=""

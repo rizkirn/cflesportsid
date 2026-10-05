@@ -2,7 +2,7 @@
 import economy from '../../data/veto/economy.json';
 import '../../styles/bracket-generator.css';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
-import { resolveAsset } from '../../utils/assets.mjs';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import type {MapContext} from '../../admin/map-assignments.mjs';
 interface Props {official?:MapContext|null;}
 const {official=null}=Astro.props;
@@ -88,7 +88,7 @@ const maps = official?official.pool.map(map=>catalog.find(entry=>entry.id===map.
               width="800"
               height="360"
               loading="lazy"
-              onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+              onerror={assetErrorHandler('maps',map)}
             />
             <strong>{map.data.name}</strong>
             <span class="selection-label"></span>
