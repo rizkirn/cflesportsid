@@ -5,6 +5,7 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
 import { calculateStatistics, emptyStats } from '../../utils/statistics';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 
 const allMatches = await getFrontendMatches();
 const calculated = calculateStatistics(allMatches);
@@ -16,7 +17,8 @@ const teams = (await getFrontendTeams()).map(team => {
     id: team.id,
     name: team.data.name,
     tag: team.data.tag,
-    logo: team.data.logo,
+    logo: resolveAsset('teams', team).src,
+    logoError: assetErrorHandler('teams',team),
     region: team.data.region,
 
     // Optional team identity color.
@@ -180,14 +182,13 @@ const teamCount = teams.length;
 
                     <img
                       src={
-                        team.logo ||
-                        `/logos/${team.tag}.webp`
+                        team.logo
                       }
                       alt={`${team.name} logo`}
                       width="56"
                       height="56"
                       loading="lazy"
-                      onerror="this.onerror=null; this.src='/logos/default.webp'"
+                      onerror={team.logoError}
                     />
 
                   </div>

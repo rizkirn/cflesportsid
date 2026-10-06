@@ -24,7 +24,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   const path = context.url.pathname.replace(/\/$/, '');
   const masterPaths = ['/admin/teams', '/admin/players', '/admin/maps'];
   const tournamentPaths = ['/admin/tournaments', '/admin/tournaments/new'];
-  const canPost = [...masterPaths, ...tournamentPaths].includes(path)
+  const canPost = /^\/admin\/assets\/(?:teams|players|maps|tournaments)\/[a-z0-9][a-z0-9-]{0,119}$/.test(path) || [...masterPaths, ...tournamentPaths].includes(path)
     || /^\/admin\/tournaments\/[a-z0-9-]{1,120}$/.test(path)
     || /^\/admin\/tournaments\/[a-z0-9-]{1,120}\/(?:setup|participants|roster|bracket|maps|matches\/[a-z0-9-]{1,160})$/.test(path);
   const allowed = canPost ? ['GET', 'HEAD', 'POST'] : ['GET', 'HEAD'];

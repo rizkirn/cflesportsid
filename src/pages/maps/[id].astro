@@ -2,7 +2,8 @@
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { statisticalProfiles } from '../../utils/player-continuity.mjs';
 import {
   calculateStatistics,
@@ -120,11 +121,11 @@ const mapMatches = matches
     <section class="map-detail-hero">
       <img
         class="map-hero-image"
-        src={`/maps/${map.id}.webp`}
+        src={resolveAsset('maps', map).src}
         alt={`${map.data.name} map`}
         width="1600"
         height="720"
-        onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+        onerror={assetErrorHandler('maps',map)}
       />
 
       <div class="map-hero-overlay"></div>
@@ -197,14 +198,13 @@ const mapMatches = matches
             <div class="map-player-leader">
               <img
                 src={
-                  player?.data.avatar ||
-                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
+                  resolveAsset('players', player).src
                 }
                 alt=""
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>
@@ -231,14 +231,13 @@ const mapMatches = matches
             <div class="map-player-leader">
               <img
                 src={
-                  player?.data.avatar ||
-                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
+                  resolveAsset('players', player).src
                 }
                 alt=""
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>
@@ -265,14 +264,13 @@ const mapMatches = matches
             <div class="map-player-leader">
               <img
                 src={
-                  player?.data.avatar ||
-                  (player?.data.uid ? `/players/${player.data.uid}.webp` : '/players/default.webp')
+                  resolveAsset('players', player).src
                 }
                 alt=""
                 width="54"
                 height="62"
                 loading="lazy"
-                onerror="this.onerror=null;this.src='/players/default.webp'"
+                onerror={assetErrorHandler('players',player)}
               />
               <p>
                 <a href={`/players/${player?.id ?? uid}`}>

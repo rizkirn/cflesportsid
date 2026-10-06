@@ -1,4 +1,5 @@
 ---
+import { imageFallbackHandler } from '../utils/assets.mjs';
 interface Player {
   uid: string;
   profileId?: string;
@@ -7,6 +8,7 @@ interface Player {
   teamTag: string;
   teamName: string;
   avatar: string;
+  avatarLegacy?: string;
   totalKills: number;
   totalDeaths: number;
   totalAssists: number;
@@ -120,7 +122,7 @@ const leaders = [
                       alt=""
                       width="100"
                       height="110"
-                      onerror="this.onerror=null; this.src='/players/default.webp'"
+                      onerror={imageFallbackHandler(top.avatar,[top.avatarLegacy,'/players/default.webp'])}
                     />
 
                     <div class="featured-leader-info">
@@ -307,9 +309,13 @@ const leaders = [
             const img =
               profile.querySelector('img')!;
 
+            const sources=[...new Set([p.avatarLegacy,'/players/default.webp'].filter(source=>source&&source!==p.avatar))];
+            let fallbackIndex=0;
+            img.hidden=false;
             img.onerror = () => {
-              img.onerror = null;
-              img.src = '/players/default.webp';
+              img.removeAttribute('srcset');
+              if(fallbackIndex<sources.length)img.src=sources[fallbackIndex++];
+              else {img.onerror=null;img.hidden=true;}
             };
 
             img.src = p.avatar;

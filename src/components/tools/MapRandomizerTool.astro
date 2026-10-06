@@ -1,12 +1,14 @@
 ---
 import economy from '../../data/veto/economy.json';
 import '../../styles/bracket-generator.css';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import type {MapContext} from '../../admin/map-assignments.mjs';
 interface Props {official?:MapContext|null;}
 const {official=null}=Astro.props;
 
-const maps = official?official.pool.map(map=>({id:map.id,data:{name:map.name}})):(await getCollection('maps'))
+const catalog = await getCollection('maps');
+const maps = official?official.pool.map(map=>catalog.find(entry=>entry.id===map.id)??{id:map.id,data:{name:map.name}}):catalog
   .filter(map => map.data.active)
   .sort((a, b) => a.data.name.localeCompare(b.data.name));
 ---
@@ -81,12 +83,12 @@ const maps = official?official.pool.map(map=>({id:map.id,data:{name:map.name}}))
         {maps.map(map => (
           <li data-map-id={map.id}>
             <img
-              src={`/maps/${map.id}.webp`}
+              src={resolveAsset('maps', map).src}
               alt=""
               width="800"
               height="360"
               loading="lazy"
-              onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+              onerror={assetErrorHandler('maps',map)}
             />
             <strong>{map.data.name}</strong>
             <span class="selection-label"></span>

@@ -1,4 +1,5 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { getAssetCollection } from '../data-access/frontend-assets';
 import { getFrontendTeams, getFrontendTournaments } from '../data-access/frontend-bracket';
 
 export async function getTeamMap() {
@@ -10,7 +11,7 @@ export async function getTeamMap() {
 }
 
 export async function getPlayerMap() {
-  const players = await getCollection('players');
+  const players = await getAssetCollection('players');
 
   return new Map(
     players.map((player) => [player.id, player])
@@ -26,7 +27,7 @@ export async function getTournamentMap() {
 }
 
 export async function getMapMap() {
-  const maps = await getCollection('maps');
+  const maps = await getAssetCollection('maps');
 
   return new Map(
     maps.map((map) => [map.id, map])

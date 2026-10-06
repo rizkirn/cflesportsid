@@ -4,7 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
-import { execFileSync } from 'node:child_process';
+import { seedFixture } from './helpers/seed-fixture.mjs';
 import { checkData } from '../scripts/data-tools.mjs';
 import { loadLegacyStatistics, plain } from '../scripts/d1-parity.mjs';
 import { readD1Matches, readMatches } from '../src/data-access/matches.mjs';
@@ -117,8 +117,7 @@ test('D1 output and outage JSON fallback retain identical continuity splits with
   const sql = new DatabaseSync(':memory:');
   try {
     for (const f of fs.readdirSync('migrations').filter(f => f.endsWith('.sql')).sort()) sql.exec(fs.readFileSync('migrations/' + f, 'utf8'));
-    execFileSync(process.execPath, ['scripts/generate-d1-seed.mjs']);
-    sql.exec(fs.readFileSync('.generated/seed-s1-s2.sql', 'utf8'));
+    sql.exec(seedFixture());
     const before = sql.prepare('SELECT * FROM player_match_entries ORDER BY match_id, entry_index').all();
     const db = { prepare: q => q, batch: async queries => queries.map(q => ({ success: true, results: sql.prepare(q).all() })) };
     const d1 = await readD1Matches(db, matches);

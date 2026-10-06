@@ -2,7 +2,7 @@
 import BracketTeams from './BracketTeams.astro';
 const {state,live,selected}=Astro.props;
 const snapshot=JSON.parse(live.snapshot);const rounds=state.options.stage.rounds.filter(round=>round.placement!==3);const bronze=state.options.stage.rounds.filter(round=>round.placement===3);
-const teams=(await Astro.props.db.prepare('SELECT id,name,tag,color,logo FROM teams').all()).results;
+const teams=(await Astro.props.db.prepare('SELECT * FROM teams').all()).results;
 const team=id=>teams.find(team=>team.id===id);
 const byes=snapshot.byes.filter(row=>row[0]===state.stage[0]);
 const rows=Math.max(2,(live.matches.filter(match=>match.round_id===rounds[0]?.id).length+byes.filter(row=>row[3]===rounds[0]?.id).length)*2);

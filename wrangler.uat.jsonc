@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cflesportsid-uat",
+  "account_id": "bf6ed4ccd73133871881b47ea58dae3d",
+  "main": "dist/server/entry.mjs",
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "rules": [{ "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }],
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "routes": [],
+  "assets": { "binding": "ASSETS", "directory": "dist/client" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "cflesportsid-staging",
+    "database_id": "4ba57de7-5fda-4703-a956-b1936546986a",
+    "migrations_dir": "migrations"
+  }],
+  "r2_buckets": [{ "binding": "CFL_ASSETS", "bucket_name": "cflesportsid-assets-staging" }]
+}

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { seedFixture } from './helpers/seed-fixture.mjs';
 import { checkData } from '../scripts/data-tools.mjs';
 import { compareReadMatches } from '../scripts/d1-read-parity.mjs';
 import { loadLegacyStatistics, plain } from '../scripts/d1-parity.mjs';
@@ -13,8 +13,7 @@ const stats = loadLegacyStatistics();
 function binding() {
   const sql = new DatabaseSync(':memory:');
   for (const file of ['0001_initial_schema.sql', '0002_preserve_player_rounds.sql', '0003_tournament_rosters.sql', '0004_match_detail_edits.sql','0005_walkovers.sql']) sql.exec(readFileSync(new URL(`../migrations/${file}`, import.meta.url), 'utf8'));
-  execFileSync(process.execPath, ['scripts/generate-d1-seed.mjs']);
-  sql.exec(readFileSync(new URL('../.generated/seed-s1-s2.sql', import.meta.url), 'utf8'));
+  sql.exec(seedFixture());
   return { sql, prepare: query => query, batch: async queries => queries.map(query => ({ success: true, results: sql.prepare(query).all() })) };
 }
 const normalized = matches => matches.map(m => ({ id: m.id, data: { ...m.data,

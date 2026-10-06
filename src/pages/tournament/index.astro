@@ -3,6 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
+import { resolveAsset, imageFallbackHandler } from '../../utils/assets.mjs';
 import { getCollection } from 'astro:content';
 import { getMatchRound } from '../../utils/tournament';
 import {
@@ -14,10 +15,7 @@ const matches = await getFrontendMatches();
 const teams = await getFrontendTeams();
 const allTournaments = await getFrontendTournaments();
 
-const tournamentPosters: Record<string, string> = {
-  'clash-for-glory-s1': '/tournaments/clash-for-glory-s1.webp',
-  'clash-for-glory-s2': '/tournaments/clash-for-glory-s2.webp',
-};
+const localPosters = new Set(Object.keys(import.meta.glob('/public/tournaments/*.webp')).map(path => path.slice('/public'.length)));
 
 const formatDate = (date: string | null) => {
   if (!date) return null;
@@ -106,7 +104,8 @@ const tournaments = allTournaments.map((tournament) => {
     season,
     month,
     winner,
-    poster: tournamentPosters[tournament.id] ?? null,
+    poster: resolveAsset('tournaments', tournament, {localFiles:localPosters}).src,
+    posterLegacy: resolveAsset('tournaments', tournament, {localFiles:localPosters}).legacy,
     matchCount: tMatches.length,
   };
 });
@@ -178,7 +177,9 @@ tournaments.sort((a, b) => {
                   loading="lazy"
                   width="768"
                   height="1024"
+                  onerror={imageFallbackHandler(tournament.poster,[tournament.posterLegacy])+";if(this.hidden)this.nextElementSibling.hidden=false"}
                 />
+                <div class="poster-placeholder" hidden><span>{tournament.name}</span></div>
               ) : (
                 <div class="poster-placeholder">
                   <span>{tournament.name}</span>
@@ -382,6 +383,8 @@ tournaments.sort((a, b) => {
   .tourney-card:hover .tourney-poster img {
     transform:scale(1.015);
   }
+
+  .poster-placeholder[hidden] { display:none; }
 
   .poster-placeholder {
     display:flex;

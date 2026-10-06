@@ -5,6 +5,7 @@ const tournaments = defineCollection({
   loader: glob({ pattern: '**/*.json', base: './src/data/tournaments' }),
   schema: z.object({
     name: z.string(),
+    poster_asset_key: z.string().nullable().optional(),
     game: z.string().default('crossfire-legends'),
     region: z.string().default('ID'),
     startDate: z.string(),
@@ -52,6 +53,7 @@ const maps = defineCollection({
     game: z.string().default('crossfire-legends'),
     active: z.boolean().default(true),
     thumbnail: z.string().min(1).optional(),
+    image_asset_key: z.string().nullable().optional(),
   }),
 });
 
@@ -62,6 +64,7 @@ const teams = defineCollection({
     tag: z.string(),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Use a six-digit hex team color, e.g. #FF5A1F').optional(),
     logo: z.string().optional(),
+    logo_asset_key: z.string().nullable().optional(),
     region: z.string(),
     founded: z.string().optional(),
     description: z.string().optional(),
@@ -91,6 +94,7 @@ const players = defineCollection({
     role: z.string().default('Player'),
     status: z.enum(['active', 'inactive']).default('active'),
     avatar: z.string().optional(),
+    photo_asset_key: z.string().nullable().optional(),
     country: z.string().optional(),
     bio: z.string().optional(),
     socials: z.object({

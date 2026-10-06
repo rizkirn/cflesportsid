@@ -1,0 +1,10 @@
+type Kind = 'teams' | 'players' | 'maps' | 'tournaments';
+export const assetFields: Record<Kind, string>;
+export function overlayAssetReferences<T>(entries: T[], collection: Kind, rows: any[]): T[];
+export function readAssetReferences<T>(db: any, entries: T[], collection: Kind): Promise<T[]>;
+export function resolveAsset(collection: Exclude<Kind, 'tournaments'>, entry: any, options?: { localFiles?: Set<string>; mediaEnabled?: boolean }): { reference: string | null; legacy: string; fallback: string; src: string };
+export function resolveAsset(collection: 'tournaments', entry: any, options?: { localFiles?: Set<string>; mediaEnabled?: boolean }): { reference: string | null; legacy: string | null; fallback: null; src: string | null };
+export function imageFallbackHandler(src: string | null, sources?: (string | null | undefined)[]): string;
+export function assetErrorHandler(collection: Kind, entry: any): string;
+export function assetImageAttributes(asset: { src: string | null; legacy: string | null; fallback: string | null }): { src: string | null; onerror: string };
+export function thumbnailSource(src: string, fallback: string | undefined, bundled: boolean): string;

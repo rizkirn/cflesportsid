@@ -4,7 +4,8 @@ import { getFrontendTeams, getFrontendTournaments } from '../../data-access/fron
 export const prerender = false;
 import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
-import { getCollection } from 'astro:content';
+import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { matchPlayerProfile } from '../../utils/player-continuity.mjs';
 import { getRoundName, getParticipantLabel } from '../../utils/tournament';
 
@@ -109,11 +110,8 @@ const playerStats = (m.data.playerStats || [])
     return {
       uid: ps.uid,
       ...(player && player.id !== ps.uid ? { profileId: player.id } : {}),
-      avatar:
-        player?.data.avatar ||
-        (ps.uid
-          ? `/players/${ps.uid}.webp`
-          : '/players/default.webp'),
+      avatar: resolveAsset('players', player ?? {data:{uid:ps.uid}}).src,
+      avatarLegacy: resolveAsset('players', player ?? {data:{uid:ps.uid}}).legacy,
 
       ign:
         ps.playerId ? (ps.ign || ps.uid) : player
@@ -256,12 +254,11 @@ const roundMVPs =
 
           <img
             src={
-              t1?.data.logo ||
-              `/logos/${team1Tag}.webp`
+              resolveAsset('teams', t1 ?? {tag:team1Tag}).src
             }
             alt={team1Name}
             class="team-logo-large"
-            onerror="this.onerror=null; this.src='/logos/default.webp'"
+            onerror={assetErrorHandler('teams',t1??{tag:team1Tag})}
           />
 
           <a
@@ -297,12 +294,11 @@ const roundMVPs =
 
           <img
             src={
-              t2?.data.logo ||
-              `/logos/${team2Tag}.webp`
+              resolveAsset('teams', t2 ?? {tag:team2Tag}).src
             }
             alt={team2Name}
             class="team-logo-large"
-            onerror="this.onerror=null; this.src='/logos/default.webp'"
+            onerror={assetErrorHandler('teams',t2??{tag:team2Tag})}
           />
 
           <a
@@ -462,10 +458,10 @@ const roundMVPs =
 
                                 <img
                                   class="map-mvp-thumbnail"
-                                  src={mapId ? `/maps/${mapId}.webp` : '/maps/placeholder.svg'}
+                                  src={mapId ? resolveAsset('maps', mapsMap.get(mapId) ?? {id:mapId}).src : '/maps/placeholder.svg'}
                                   alt={mapName}
                                   loading="lazy"
-                                  onerror="this.onerror=null;this.src='/maps/placeholder.svg'"
+                                  onerror={assetErrorHandler('maps',mapsMap.get(mapId)??{id:mapId})}
                                 />
 
                                 <h3 class="map-mvp-overlay">
@@ -482,16 +478,13 @@ const roundMVPs =
                                     <img
                                       class="map-mvp-avatar"
                                       src={
-                                        playersMap.get(mvp.uid)?.data.avatar ||
-                                        (mvp.uid
-                                          ? `/players/${mvp.uid}.webp`
-                                          : '/players/default.webp')
+                                        resolveAsset('players', playersMap.get(mvp.uid) ?? {data:{uid:mvp.uid}}).src
                                       }
                                       alt={`${mvp.ign} photo`}
                                       width="100"
                                       height="110"
                                       loading="lazy"
-                                      onerror="this.onerror=null;this.src='/players/default.webp'"
+                                      onerror={assetErrorHandler('players',playersMap.get(mvp.uid)??{data:{uid:mvp.uid}})}
                                     />
 
                                     <div>

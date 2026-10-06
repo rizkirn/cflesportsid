@@ -4,6 +4,7 @@ import { getFrontendTeams, getFrontendTournaments } from '../../data-access/fron
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { calculateStatistics } from '../../utils/statistics';
+import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { getParticipantLabel, getSourceNode, resolveSourceTeam, validateTournament } from '../../utils/tournament';
 
@@ -141,10 +142,10 @@ function bracketRow(slot: number, roundIndex: number) {
                               {team && (
                                 <img
                                   class="bracket-team-logo"
-                                  src={team.data.logo || `/logos/${team.data.tag}.webp`}
+                                  src={resolveAsset('teams', team).src}
                                   alt={`${team.data.name} logo`}
                                   loading="lazy"
-                                  onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                  onerror={assetErrorHandler('teams',team)}
                                 />
                               )}
                               <span class="bracket-team-name">{team?.data.name ?? entry.bye.teamId}</span>
@@ -181,10 +182,10 @@ function bracketRow(slot: number, roundIndex: number) {
                             {team1 && (
                               <img
                                 class="bracket-team-logo"
-                                src={team1.data.logo || `/logos/${team1.data.tag}.webp`}
+                                src={resolveAsset('teams', team1).src}
                                 alt={`${team1.data.name} logo`}
                                 loading="lazy"
-                                onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                onerror={assetErrorHandler('teams',team1)}
                               />
                             )}
                             <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
@@ -196,10 +197,10 @@ function bracketRow(slot: number, roundIndex: number) {
                             {team2 && (
                               <img
                                 class="bracket-team-logo"
-                                src={team2.data.logo || `/logos/${team2.data.tag}.webp`}
+                                src={resolveAsset('teams', team2).src}
                                 alt={`${team2.data.name} logo`}
                                 loading="lazy"
-                                onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                onerror={assetErrorHandler('teams',team2)}
                               />
                             )}
                             <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>
@@ -239,10 +240,10 @@ function bracketRow(slot: number, roundIndex: number) {
                                 {team1 && (
                                   <img
                                     class="bracket-team-logo"
-                                    src={team1.data.logo || `/logos/${team1.data.tag}.webp`}
+                                    src={resolveAsset('teams', team1).src}
                                     alt={`${team1.data.name} logo`}
                                     loading="lazy"
-                                    onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                    onerror={assetErrorHandler('teams',team1)}
                                   />
                                 )}
                                 <span class="bracket-team-name">{team1?.data.name ?? team1Id ?? getParticipantLabel(m, 1)}</span>
@@ -255,10 +256,10 @@ function bracketRow(slot: number, roundIndex: number) {
                                 {team2 && (
                                   <img
                                     class="bracket-team-logo"
-                                    src={team2.data.logo || `/logos/${team2.data.tag}.webp`}
+                                    src={resolveAsset('teams', team2).src}
                                     alt={`${team2.data.name} logo`}
                                     loading="lazy"
-                                    onerror="this.onerror=null;this.src='/logos/default.webp'"
+                                    onerror={assetErrorHandler('teams',team2)}
                                   />
                                 )}
                                 <span class="bracket-team-name">{team2?.data.name ?? team2Id ?? getParticipantLabel(m, 2)}</span>

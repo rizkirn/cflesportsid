@@ -11,6 +11,7 @@ type CatalogTeam = {
   id: string;
   name: string;
   logo: string;
+  logoLegacy?: string;
   color: string;
 };
 
@@ -841,10 +842,11 @@ export function initializeBracketGenerator() {
               logo.loading =
                 'lazy';
 
+              const sources=[...new Set([team.logoLegacy,'/logos/default.webp'].filter((source):source is string=>Boolean(source)&&source!==team.logo))];
+              let fallbackIndex=0;
               logo.onerror = () => {
-                logo.onerror = null;
-                logo.src =
-                  '/logos/default.webp';
+                if(fallbackIndex<sources.length)logo.src=sources[fallbackIndex++];
+                else {logo.onerror=null;logo.hidden=true;}
               };
 
               row.append(logo);
