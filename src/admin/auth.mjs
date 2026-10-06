@@ -8,7 +8,7 @@ export function createAccessVerifier(fetcher = fetch, options = {}) {
         if (!entry) {
             if (keys.size >= 4)
                 keys.delete(keys.keys().next().value);
-            entry = createRemoteJWKSet(new URL(issuer + '/cdn-cgi/access/certs'), { timeoutDuration: 3000, cooldownDuration: options.cooldownDuration ?? 1000, cacheMaxAge: 300000, [customFetch]: (url, init) => fetcher(url, { ...init, redirect: 'error' }) });
+            entry = createRemoteJWKSet(new URL(issuer + '/cdn-cgi/access/certs'), { timeoutDuration: 3000, cooldownDuration: options.cooldownDuration ?? 1000, cacheMaxAge: 300000, [customFetch]: (url, init) => fetcher(url, { ...init, redirect: 'manual' }) });
             keys.set(issuer, entry);
         }
         const { payload } = await jwtVerify(token, entry, { issuer, audience, algorithms: ['RS256'], requiredClaims: ['exp', 'iat', 'nbf', 'sub', 'email', 'type'], clockTolerance: 5 });

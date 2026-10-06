@@ -25,3 +25,22 @@ test('trusted JWKS rotation refresh and unavailable keys fail closed',async()=>{
 test('public tools stay public and official links only enter protected workspace',()=>{assert.equal(legacyOfficialLocation(new URL('https://example.invalid/veto')),null);assert.equal(legacyOfficialLocation(new URL('https://example.invalid/map-randomizer?adminTournament=test&adminRound=quarter-final')),'/admin/tournaments/test/maps?round=quarter-final');assert.equal(legacyOfficialLocation(new URL('https://example.invalid/veto?adminTournament=test&adminMatch=sf-1')),'/admin/tournaments/test/maps?match=sf-1');assert.throws(()=>legacyOfficialLocation(new URL('https://example.invalid/veto?adminTournament=../escape&adminMatch=sf-1')));});
 test('every concrete admin route guards independently; middleware guards assets and descendants',()=>{function walk(path){return fs.readdirSync(path,{withFileTypes:true}).flatMap(e=>e.isDirectory()?walk(path+'/'+e.name):[path+'/'+e.name]);}const files=walk('src/pages/admin').filter(p=>/\.(astro|ts)$/.test(p));assert.equal(files.length,15);for(const file of files){const source=fs.readFileSync(file,'utf8');assert.match(source,/await authorizeAdmin\(/,file);assert.doesNotMatch(source,/requireLocalAdmin\(/,file);}const middleware=fs.readFileSync('src/middleware.ts','utf8');assert.match(middleware,/authorizeAdmin/);assert.match(middleware,/isAdminPath/);});
 test('all page and asset paths enforce online reads/writes before form/body work',async()=>{const h=harness(),jwt=await token();const paths=['/admin','/admin/teams','/admin/players','/admin/maps','/admin/brackets','/admin/matches','/admin/tournaments','/admin/tournaments/new','/admin/tournaments/test','/admin/tournaments/test/setup','/admin/tournaments/test/participants','/admin/tournaments/test/roster','/admin/tournaments/test/bracket','/admin/tournaments/test/maps','/admin/tournaments/test/matches','/admin/tournaments/test/matches/m1',...['teams','players','maps','tournaments'].map(c=>'/admin/assets/'+c+'/test')];for(const path of paths){const req=(method,t)=>new Request('https://'+hostname+path,{method,headers:t?{'Cf-Access-Jwt-Assertion':t}:{}});for(const method of ['GET','HEAD','POST'])await assert.rejects(h.authorize(req(method),false,env),denied);for(const method of ['GET','HEAD'])assert.equal((await h.authorize(req(method,jwt),false,{...env,ADMIN_WRITES_ENABLED:'false'})).writes,false);await assert.rejects(h.authorize(req('POST',jwt),false,{...env,ADMIN_WRITES_ENABLED:'false'}),denied);assert.equal((await h.authorize(req('POST',jwt),false,env)).writes,true);}});
+
+test('JWKS fetch uses Workers-supported manual redirects and rejects redirect responses',async()=>{
+  const calls=[];
+  const verify=createAccessVerifier(async (url,init)=>{
+    assert.equal(init.redirect,'manual');
+    calls.push(String(url));
+    return Response.json({keys:[publicKeys[0]]});
+  });
+  assert.deepEqual(await verify(await token(),{issuer,audience}),{sub:'human-fixture',email:'admin@example.invalid'});
+  assert.deepEqual(calls,[issuer+'/cdn-cgi/access/certs']);
+  let redirectedCalls=0;
+  const redirecting=createAccessVerifier(async (url,init)=>{
+    assert.equal(init.redirect,'manual');
+    redirectedCalls++;
+    return new Response(null,{status:302,headers:{Location:'https://untrusted.example.invalid/keys'}});
+  });
+  await assert.rejects(redirecting(await token(),{issuer,audience}),/Expected 200 OK/);
+  assert.equal(redirectedCalls,1);
+});
