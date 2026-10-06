@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm } from './tournaments.mjs';
 import { seriesWinner } from './live-results.mjs';
 import { correctionReason, auditStatement, clearDetailStatements } from './corrections.mjs';
@@ -128,6 +129,7 @@ export function validateDetails(payload,state,complete) {
   if(score1!==state.match.score1||score2!==state.match.score2)throw new AdminError(`Detailed series score ${score1}–${score2} differs from confirmed score ${state.match.score1}–${state.match.score2}. Correct the details before completing.`);
 }
 export async function saveMatchDetails(db,tournamentId,matchId,form) {
+  db=mutationDatabase(db,form.intent==='save-draft'?'SAVE_DETAILS_DRAFT':form.intent==='correct-details'||form.payload?.correction_required?'CORRECT_DETAILS':form.payload?.maps?.some(m=>m.mode==='walkover')?'PARTIAL_WALKOVER':'COMPLETE_DETAILS',matchId);
   const correcting=form.intent==='correct-details';
   const state=await readMatchDetails(db,tournamentId,matchId,{correction:correcting});
   if(!state)throw new AdminError('Match not found.',404);

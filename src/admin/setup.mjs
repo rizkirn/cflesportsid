@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm } from './tournaments.mjs';
 
 export const cfgTemplate = {
@@ -124,6 +125,7 @@ export function validateSetup(input) {
 }
 
 export async function saveSetup(db, tournamentId, input) {
+  db=mutationDatabase(db,'SAVE_SETUP',tournamentId);
   const current = await readSetup(db, tournamentId);
   if (!current) throw new AdminError('Tournament not found.', 404);
   if (current.locked) throw new AdminError('Setup is read-only once matches or byes exist, the tournament has started, or multiple stages are present.', 409);

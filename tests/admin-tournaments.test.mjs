@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -50,8 +51,9 @@ test('stable slug handles accents, punctuation, case and names without ASCII', a
 
 test('real schema insert preserves server defaults, collisions and foreign key integrity', async () => {
   const sqlite = new DatabaseSync(':memory:');
+
   sqlite.exec(readFileSync('migrations/0001_initial_schema.sql', 'utf8'));
-  const db = { prepare(sql) {
+  const rawDb = { prepare(sql) {
     let values = [];
     return {
       bind(...args) { values = args; return this; },
@@ -60,6 +62,9 @@ test('real schema insert preserves server defaults, collisions and foreign key i
       async first() { return sqlite.prepare(sql).get(...values) ?? null; },
     };
   } };
+sqlite.exec(readFileSync('migrations/0010_admin_audit_log.sql','utf8'));
+const db=testAdminDatabase(rawDb,sqlite);
+
   try {
     const id = await createTournament(db, { ...input, game: 'evil', status: 'completed', winner_team_id: 'evil' });
     assert.equal(id, 'clash-for-glory-s3');

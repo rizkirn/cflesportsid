@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -14,7 +15,9 @@ import {readMapContext,confirmMaps} from '../src/admin/map-assignments.mjs';
 
 async function fixture(bronze=true){
  const sql=new DatabaseSync(':memory:');for(const file of readdirSync('migrations').filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync('migrations/'+file,'utf8'));
- const db={hook:null,prepare(query){let values=[];const args=()=>/\?\d/.test(query)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {query,bind(...v){values=v;return this;},async all(){return {success:true,results:sql.prepare(query).all(...args())};},async first(){return sql.prepare(query).get(...args())??null;}};},async batch(statements){if(/^UPDATE/.test(statements[0].query)&&this.hook){const hook=this.hook;this.hook=null;hook();}sql.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.all());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+ const rawDb={hook:null,prepare(query){let values=[];const args=()=>/\?\d/.test(query)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {query,bind(...v){values=v;return this;},async all(){return {success:true,results:sql.prepare(query).all(...args())};},async first(){return sql.prepare(query).get(...args())??null;}};},async batch(statements){if(/^UPDATE/.test(statements[0].query)&&this.hook){const hook=this.hook;this.hook=null;hook();}sql.exec('BEGIN');try{const r=[];for(const s of statements)r.push(await s.all());sql.exec('COMMIT');return r;}catch(e){sql.exec('ROLLBACK');throw e;}}};
+const db=testAdminDatabase(rawDb,sql);
+
  const id=await createTournamentWithSetup(db,{name:'Future Completion Cup',start_date:'2099-12-01',end_date:'2099-12-02',is_test:'1',bracket_size:'4',map_count:'3',action_seconds:'20',reserve_seconds:'90',bronze_match:bronze?'1':''});
  for(const team of ['a','b','c','d']){sql.prepare('INSERT INTO teams(id,name,tag,region) VALUES(?,?,?,?)').run(team,'Team '+team,team,'ID');sql.prepare('INSERT INTO tournament_teams VALUES(?,?)').run(id,team);for(let n=0;n<5;n++){sql.prepare('INSERT INTO players(id,uid,name,current_ign,current_team_id) VALUES(?,?,?,?,?)').run(team+n,team+n,team+n,team+n,team);sql.prepare('INSERT INTO tournament_rosters VALUES(?,?,?,?,?)').run(id,team,team+n,team+n,n+1);}}
  for(const map of ['ankara','aztec','island'])sql.prepare('INSERT INTO maps(id,name) VALUES(?,?)').run(map,map);

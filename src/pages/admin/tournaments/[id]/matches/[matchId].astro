@@ -4,11 +4,12 @@ import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import MatchDetailsRead from '../../../../../components/admin/MatchDetailsRead.astro';
 import Status from '../../../../../components/admin/StatusBadge.astro';
-import {AdminError,requireLocalAdmin} from '../../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../../admin/auth.mjs';
 import {readParticipantState} from '../../../../../admin/participants.mjs';
 import {readMatchDetails,readDetailsForm,saveMatchDetails} from '../../../../../admin/match-details.mjs';
 import {readCorrectionHistory} from '../../../../../admin/corrections.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);const id=Astro.params.id!;const matchId=Astro.params.matchId!;
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;const id=Astro.params.id!;const matchId=Astro.params.matchId!;
 const editing=Astro.url.searchParams.get('edit')==='details';
 let state;let workspace;let submitted;let history=[];let message='';let unavailable=false;
 try{

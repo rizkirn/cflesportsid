@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import {AdminError,readAdminForm,tournamentId} from './tournaments.mjs';
 export const masterDefinitions={
  teams:{title:'Teams',singular:'Team',fields:['name','tag','region','description','color','logo'],labels:['Name','Tag','Region','Description','Color','Logo URL']},
@@ -10,6 +11,7 @@ export async function readMasterForm(request,key){return readAdminForm(request,{
 function text(value,label,max,required=false){const result=typeof value==='string'?value.normalize('NFKC').trim():'';const checked=label==='Description'?result.replace(/[\r\n]/g,''):result;if(required&&!result||result.length>max||/[\p{Cc}\p{Cf}]/u.test(checked))throw new AdminError(`Enter a valid ${label.toLowerCase()} (max ${max} characters).`);return result;}
 function asset(value,label){const result=text(value,label,2048);if(!result)return null;if(result.startsWith('/')&&!result.startsWith('//')&&!result.includes('\\'))return result;try{const url=new URL(result);if(url.protocol==='https:'&&!url.username&&!url.password)return result;}catch{}throw new AdminError(`${label} must be an HTTPS URL or a local asset path.`);}
 export async function saveMaster(db,key,id,input){
+  db=mutationDatabase(db,(input.intent==='create'?'CREATE_':'EDIT_')+({teams:'TEAM',players:'PLAYER',maps:'MAP'}[key]??'INVALID'),()=>id);
  const config=definition(key);const creating=input.intent==='create';if(!creating&&input.intent!=='edit')throw new AdminError('Unknown master action.');
  const previous=creating?null:await db.prepare(`SELECT * FROM ${key} WHERE id=?`).bind(id).first();
  if(!creating&&!previous)throw new AdminError(`${config.singular} not found.`,404);

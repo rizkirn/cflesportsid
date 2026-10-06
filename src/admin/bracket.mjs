@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm } from './tournaments.mjs';
 import { readParticipantState, participantSnapshotSQL } from './participants.mjs';
 import { rosterReadiness } from './roster-snapshot.mjs';
@@ -60,6 +61,7 @@ export async function officialDraw(state,form,secret,random=secureRandom,now=Dat
   return {draws,token};
 }
 export async function confirmOfficialBracket(db,id,form,secret,now=Date.now()) {
+  db=mutationDatabase(db,'CONFIRM_BRACKET',id);
   const payload=await unseal(form.token??'',secret,now);
   const state=await readBracketState(db,id); editable(state,form.revision);
   if(payload.id!==id || payload.snapshot!==state.snapshot) throw new AdminError('Setup, dates, participants or roster changed. Start a new draw.',409);

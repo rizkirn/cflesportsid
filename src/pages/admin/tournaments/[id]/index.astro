@@ -2,13 +2,14 @@
 export const prerender=false;
 import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import {readRosterState} from '../../../../admin/roster.mjs';
 import {readSetup,setupForm,readSetupForm,saveSetup} from '../../../../admin/setup.mjs';
 import {readCompletion,readCompletionForm,completeTournament} from '../../../../admin/completion.mjs';
 import AssetEditor from '../../../../components/admin/AssetEditor.astro';
 import Status from '../../../../components/admin/StatusBadge.astro';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let state;let setup;let values;let completion;let message='';
 try{state=await readRosterState(db,Astro.params.id);if(!state)Astro.response.status=404;else{setup=await readSetup(db,state.tournament.id);values=setupForm(setup);completion=await readCompletion(db,state.tournament.id);if(Astro.request.method==='POST'){if(Astro.url.searchParams.get('action')==='complete'){const form=await readCompletionForm(Astro.request);await completeTournament(db,state.tournament.id,form);return Astro.redirect(`${Astro.url.pathname}?saved=completed`,303);}values=await readSetupForm(Astro.request);await saveSetup(db,state.tournament.id,values);return Astro.redirect(`${Astro.url.pathname}?saved=setup`,303);}}}catch(error){message=error instanceof AdminError?error.message:'Could not load or save tournament.';Astro.response.status=error instanceof AdminError?error.status:503;}
 const base=state?`/admin/tournaments/${state.tournament.id}`:'';

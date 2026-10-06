@@ -25,9 +25,9 @@ test('only the frontend boundary supplies the DB binding and keeps JSON fallback
   assert.match(source, /return result.matches/);
   for (const file of walk('src').filter(f => /\.(astro|ts|mjs)$/.test(f) && !f.startsWith('src/data-access/'))) {
     const text = readFileSync(file, 'utf8');
-    assert.doesNotMatch(text, /env\.DB/, file);
+    if(file!=='src/admin/auth.mjs')assert.doesNotMatch(text, /env\.DB/, file);
     if (file.startsWith('src/pages/admin/') || file === 'src/middleware.ts') {
-      assert.match(text, /requireLocalAdmin\(/, file);
+      assert.match(text, /authorizeAdmin\(/, file);
     } else if (!file.endsWith('.d.ts')) {
       assert.doesNotMatch(text, /from ['"]cloudflare:workers['"]|import\(['"]cloudflare:workers['"]\)/, file);
     }

@@ -5,10 +5,11 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import UnsavedChanges from '../../../../components/admin/UnsavedChanges.astro';
 import Status from '../../../../components/admin/StatusBadge.astro';
 import {rosterReadiness} from '../../../../admin/roster-snapshot.mjs';
-import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import {readRosterState,workspaceRosterForm,readWorkspaceRosterForm,editWorkspaceRoster,saveWorkspaceRoster,validateWorkspaceRoster} from '../../../../admin/roster.mjs';
 import {saveMaster} from '../../../../admin/master-data.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let state;let form;let message='';let draft=false;let created=false;
 try{
  state=await readRosterState(db,Astro.params.id);

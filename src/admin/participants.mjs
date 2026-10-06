@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm, tournamentId } from './tournaments.mjs';
 import { setupSnapshotSQL } from './setup.mjs';
 import { rosterRowsSQL } from './roster-snapshot.mjs';
@@ -113,6 +114,7 @@ export async function editParticipantForm(form, state) {
   return form;
 }
 export async function saveParticipants(db, id, form) {
+  db=mutationDatabase(db,'SAVE_PARTICIPANTS',id);
   const state = await readParticipantState(db, id);
   if (!state) throw new AdminError('Tournament not found.', 404);
   requireEditableParticipants(state, form.revision);

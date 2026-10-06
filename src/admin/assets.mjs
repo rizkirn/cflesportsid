@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import {AdminError} from './tournaments.mjs';
 import {MAX_IMAGE_BYTES,validateImage} from './image-validation.mjs';
 import {validAssetKey} from '../utils/asset-keys.mjs';
@@ -22,6 +23,7 @@ export async function readAssetRequest(request){
  return {intent,expected:expected||null,file};
 }
 export async function saveAsset(db,bucket,category,id,input,decode){
+  db=mutationDatabase(db,input.intent==='revert'?'REVERT_ASSET':input.expected?'REPLACE_ASSET':'UPLOAD_ASSET',`${category}/${id}`);
  const row=await assetEntity(db,category,id),config=categories[category],previous=row[config.column]??null;
  if(!Object.hasOwn(row,config.column))throw new AdminError('Image uploads require staging migration 0009.',503);
  if(input.expected!==previous)throw new AdminError('Image changed. Reload before saving.',409);

@@ -4,9 +4,10 @@ import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import UnsavedChanges from '../../../../components/admin/UnsavedChanges.astro';
 import {saveMaster} from '../../../../admin/master-data.mjs';
-import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import {readParticipantState,participantForm,readParticipantForm,saveParticipants} from '../../../../admin/participants.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let state;let values;let message='';
 try{
  state=await readParticipantState(db,Astro.params.id);

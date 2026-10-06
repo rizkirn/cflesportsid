@@ -3,9 +3,9 @@ export const prerender=false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import MatchesBrowser from '../../../../components/admin/MatchesBrowser.astro';
-import { requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import { readParticipantState } from '../../../../admin/participants.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let workspace;let failed=false;
 try {workspace=await readParticipantState(db,Astro.params.id);if(!workspace)Astro.response.status=404;}catch{failed=true;Astro.response.status=503;}
 ---

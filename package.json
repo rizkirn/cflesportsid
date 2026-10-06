@@ -25,7 +25,8 @@
     "@jsquash/jpeg": "^1.6.0",
     "@jsquash/png": "^3.1.1",
     "@jsquash/webp": "^1.5.0",
-    "astro": "^7.3.2"
+    "astro": "^7.3.2",
+    "jose": "6.2.12"
   },
   "allowScripts": {
     "esbuild@0.27.7": true,

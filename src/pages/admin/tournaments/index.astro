@@ -3,8 +3,9 @@ export const prerender=false;
 import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
 import Status from '../../../components/admin/StatusBadge.astro';
-import {AdminError,listTournaments,requireLocalAdmin,readAdminForm,deleteTestTournament,metadataRevision,saveTournamentMetadata} from '../../../admin/tournaments.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+import {AdminError,listTournaments,readAdminForm,deleteTestTournament,metadataRevision,saveTournamentMetadata} from '../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../admin/auth.mjs';
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let tournaments=[];let message='';let failed=false;let submitted;
 try{if(Astro.request.method==='POST'){submitted=await readAdminForm(Astro.request,{allowedField:key=>['intent','confirm_name','confirmed','name','start_date','end_date','revision'].includes(key)});const id=Astro.url.searchParams.get('selected');if(submitted.intent==='delete-test'){await deleteTestTournament(db,id,submitted);return Astro.redirect('/admin/tournaments?deleted=test',303);}if(submitted.intent==='metadata'){await saveTournamentMetadata(db,id,submitted);return Astro.redirect(`/admin/tournaments?selected=${encodeURIComponent(id)}&saved=1`,303);}throw new AdminError('Unknown tournament action.');}}catch(error){message=error instanceof AdminError?error.message:'Could not save tournament.';Astro.response.status=error instanceof AdminError?error.status:503;}
 try{tournaments=await listTournaments(db);}catch{failed=true;Astro.response.status=503;}

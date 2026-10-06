@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,9 +11,13 @@ import { readLiveResults, saveLiveResult, seriesWinner } from '../src/admin/live
 import { readD1Matches } from '../src/data-access/matches.mjs';
 const secret='a'.repeat(64);
 async function fixture(count=13) {
-  const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0002_preserve_player_rounds.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8')); sqlite.exec(readFileSync('migrations/0004_match_detail_edits.sql','utf8'));sqlite.exec(readFileSync('migrations/0005_walkovers.sql','utf8'));
+  const sqlite=new DatabaseSync(':memory:');
+sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0002_preserve_player_rounds.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8')); sqlite.exec(readFileSync('migrations/0004_match_detail_edits.sql','utf8'));sqlite.exec(readFileSync('migrations/0005_walkovers.sql','utf8'));
   sqlite.exec("INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('test-cup','Test Cup','2026-10-01','2026-10-02','upcoming','single-elimination')");
-  const db={hook:null,prepare(sql){let values=[];return {bind(...args){values=args;return this;},async all(){const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {success:true,results:sqlite.prepare(sql).all(...args)};}};},async batch(statements){if(statements.length>3&&this.hook){const hook=this.hook;this.hook=null;hook();}sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+  const rawDb={hook:null,prepare(sql){let values=[];return {bind(...args){values=args;return this;},async all(){const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values;return {success:true,results:sqlite.prepare(sql).all(...args)};}};},async batch(statements){if(statements.length>3&&this.hook){const hook=this.hook;this.hook=null;hook();}sqlite.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sqlite.exec('COMMIT');return results;}catch(e){sqlite.exec('ROLLBACK');throw e;}}};
+sqlite.exec(readFileSync('migrations/0010_admin_audit_log.sql','utf8'));
+const db=testAdminDatabase(rawDb,sqlite);
+
   await saveSetup(db,'test-cup',setupForm(await readSetup(db,'test-cup')));
   for(let i=1;i<=count;i++){sqlite.prepare('INSERT INTO teams(id,name,tag,region) VALUES(?,?,?,?)').run(`t${i}`,`Team ${i}`,`T${i}`,'ID');sqlite.prepare('INSERT INTO tournament_teams VALUES(?,?)').run('test-cup',`t${i}`);}
   for(let i=1;i<=count;i++)for(let n=1;n<=5;n++){const id=`p${i}-${n}`;sqlite.prepare('INSERT INTO players(id,name,current_ign) VALUES(?,?,?)').run(id,id,id);sqlite.prepare('INSERT INTO tournament_rosters VALUES(?,?,?,?,?)').run('test-cup',`t${i}`,id,id,n);}

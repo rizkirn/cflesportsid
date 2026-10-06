@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm } from './tournaments.mjs';
 import { playedMapGuard } from './map-assignments.mjs';
 import { readLiveResults, resultSnapshotSQL, seriesWinner } from './live-results.mjs';
@@ -26,6 +27,7 @@ export async function readResultCorrectionForm(request) {
     ['intent','result_revision','score1','score2','result_type','walkover_winner','reason','confirmed'].includes(key)});
 }
 export async function saveResultCorrection(db,tournamentId,matchId,form) {
+  db=mutationDatabase(db,'CORRECT_RESULT',matchId);
   const reason=correctionReason(form.reason);
   if(form.intent!=='correct-result'||form.confirmed!=='yes')throw new AdminError('Confirm the result correction before saving.');
   const state=await readLiveResults(db,tournamentId);

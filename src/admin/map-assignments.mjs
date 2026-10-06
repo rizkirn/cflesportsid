@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import {AdminError,readAdminForm} from './tournaments.mjs';
 import {resolveVetoResult} from '../utils/veto-engine.mjs';
 import scrimSettings from '../data/veto/scrim.json' with {type:'json'};
@@ -56,6 +57,7 @@ export function defaultVetoSteps(poolSize){
 }
 export async function readMapConfirmation(request){return readAdminForm(request,{maxBytes:16384,allowedField:key=>['revision','maps','actions','confirmed'].includes(key)});}
 export async function confirmMaps(db,tournamentId,target,form){
+  db=mutationDatabase(db,'CONFIRM_MAPS',tournamentId);
  const state=await readMapContext(db,tournamentId,target);
  if(state.locked)throw new AdminError('Maps are locked after a match starts or has saved details.',409);
  if(state.matchId&&state.teams.length!==2)throw new AdminError('Both teams must be known before Veto.',409);

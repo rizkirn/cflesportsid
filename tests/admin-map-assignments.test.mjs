@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -14,7 +15,9 @@ import {saveResultCorrection} from '../src/admin/corrections.mjs';
 function fixture(){
  const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');
  for(const file of readdirSync('migrations').filter(file=>file.endsWith('.sql')).sort())sql.exec(readFileSync(`migrations/${file}`,'utf8'));
- const db={hook:null,prepare(query){let args=[];return {query,bind(...values){args=values;return this;},async first(){return (await this.all()).results[0]??null;},async all(){const values=/\?\d/.test(query)?[Object.fromEntries(args.map((v,i)=>['?'+(i+1),v]))]:args;return {success:true,results:sql.prepare(query).all(...values)};}};},async batch(statements){if(this.hook&&statements[0].query.startsWith('UPDATE')){const hook=this.hook;this.hook=null;hook();}sql.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sql.exec('COMMIT');return results;}catch(error){sql.exec('ROLLBACK');throw error;}}};
+ const rawDb={hook:null,prepare(query){let args=[];return {query,bind(...values){args=values;return this;},async first(){return (await this.all()).results[0]??null;},async all(){const values=/\?\d/.test(query)?[Object.fromEntries(args.map((v,i)=>['?'+(i+1),v]))]:args;return {success:true,results:sql.prepare(query).all(...values)};}};},async batch(statements){if(this.hook&&statements[0].query.startsWith('UPDATE')){const hook=this.hook;this.hook=null;hook();}sql.exec('BEGIN');try{const results=[];for(const s of statements)results.push(await s.all());sql.exec('COMMIT');return results;}catch(error){sql.exec('ROLLBACK');throw error;}}};
+const db=testAdminDatabase(rawDb,sql);
+
  for(let i=0;i<11;i++)sql.prepare('INSERT INTO maps(id,name) VALUES(?,?)').run(`map${i}`,`Map ${i}`);
  for(let i=0;i<8;i++){sql.prepare('INSERT INTO teams(id,name,tag,region) VALUES(?,?,?,?)').run(`t${i}`,`Team ${i}`,`T${i}`,'ID');for(let j=0;j<5;j++)sql.prepare('INSERT INTO players(id,uid,name,current_ign,current_team_id) VALUES(?,?,?,?,?)').run(`p${i}-${j}`,`uid${i}-${j}`,`Player ${i}-${j}`,`IGN ${i}-${j}`,`t${i}`);}
  return {sql,db};

@@ -2,9 +2,10 @@
 export const prerender=false;
 import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
-import {AdminError,requireLocalAdmin} from '../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import {readSetupForm,saveSetup} from '../../../../admin/setup.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 const workspace=`/admin/tournaments/${Astro.params.id}`;
 if(Astro.request.method!=='POST')return Astro.redirect(workspace,303);
 let message='';

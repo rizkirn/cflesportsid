@@ -4,11 +4,12 @@ import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import ResultInspector from '../../../../components/admin/ResultInspector.astro';
 import OperationalBracket from '../../../../components/admin/OperationalBracket.astro';
-import { AdminError, requireLocalAdmin } from '../../../../admin/tournaments.mjs';
+import {AdminError} from '../../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../../admin/auth.mjs';
 import { readBracketState, readBracketForm, officialDraw, confirmOfficialBracket } from '../../../../admin/bracket.mjs';
 import { readLiveResults } from '../../../../admin/live-results.mjs';
 import { readResultEditorForm, saveEditedResult } from '../../../../admin/result-editor.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let state;let live;let preview;let submitted;let message='';let drawCount='1';
 const secret=(env as unknown as { ADMIN_DRAW_KEY?: string }).ADMIN_DRAW_KEY;
 try {

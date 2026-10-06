@@ -1,8 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import VetoTool from '../components/tools/VetoTool.astro';
-import {getOfficialToolContext} from '../data-access/official-tool-context';
+import {officialToolRedirect} from '../data-access/official-tool-context';
 export const prerender = false;
-const official=await getOfficialToolContext(Astro.request,import.meta.env.DEV,'veto');
+const redirect=officialToolRedirect(Astro.request);if(redirect)return redirect;
+const official=null;
 ---
 <Layout title="CFL Esports ID - Map Veto Tool" current="Veto"><VetoTool official={official}/></Layout>

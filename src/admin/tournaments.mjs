@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 export class AdminError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
@@ -48,6 +49,7 @@ export async function readCreateForm(request) {
 }
 
 export async function createTournamentWithSetup(db,input) {
+  db=mutationDatabase(db,'CREATE_TOURNAMENT',()=>id);
   const {cfgTemplate,validateSetup}=await import('./setup.mjs');
   const value=validateTournament(input);
   const setup=validateSetup({...cfgTemplate,...Object.fromEntries(['bracket_size','map_count','action_seconds','reserve_seconds'].map(key=>[key,input[key]??cfgTemplate[key]])),bronze_match:input.bronze_match??''});
@@ -87,6 +89,7 @@ export async function tournamentId(name) {
 }
 
 export async function createTournament(db, input) {
+  db=mutationDatabase(db,'CREATE_TOURNAMENT',()=>id);
   const value = validateTournament(input);
   const id = await tournamentId(value.name);
   if(input.is_test!==undefined&&!['0','1'].includes(input.is_test))throw new AdminError('Select Official or Test.');
@@ -128,6 +131,7 @@ export function metadataRevision(tournament) {
 }
 
 export async function saveTournamentMetadata(db,id,form) {
+  db=mutationDatabase(db,'EDIT_TOURNAMENT',id);
   const tournament=await getTournament(db,id);
   if(!tournament)throw new AdminError('Tournament not found.',404);
   if(form.revision!==metadataRevision(tournament))throw new AdminError('Tournament changed. Reload before saving.',409);
@@ -142,6 +146,7 @@ export async function saveTournamentMetadata(db,id,form) {
 }
 
 export async function deleteTestTournament(db,id,form) {
+  db=mutationDatabase(db,'DELETE_TEST_TOURNAMENT',id);
   if(!(await testLifecycleAvailable(db)))throw new AdminError('Test deletion requires migration 0007.',503);
   const tournament=await getTournament(db,id);
   if(!tournament)throw new AdminError('Tournament not found.',404);

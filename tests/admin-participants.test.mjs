@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
@@ -5,12 +6,16 @@ import { readFileSync } from 'node:fs';
 import { readSetup, setupForm, saveSetup } from '../src/admin/setup.mjs';
 import { readParticipantState, participantForm, validateParticipantRows, editParticipantForm, saveParticipants, readParticipantForm } from '../src/admin/participants.mjs';
 async function fixture() {
-  const sqlite = new DatabaseSync(':memory:'); sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8'));
+  const sqlite = new DatabaseSync(':memory:');
+ sqlite.exec(readFileSync('migrations/0001_initial_schema.sql','utf8')); sqlite.exec(readFileSync('migrations/0003_tournament_rosters.sql','utf8'));
   sqlite.exec("INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('test-cup','Test Cup','2026-01-01','2026-01-01','upcoming','single-elimination'); INSERT INTO teams(id,name,tag,region) VALUES('alpha','Alpha','ALP','ID'),('beta','Beta','BET','ID')");
-  const db={ hook:null, prepare(sql) { let values=[]; return { sql, bind(...args) {values=args;return this;}, async all() { const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values; return {success:true,results:sqlite.prepare(sql).all(...args)}; } }; }, async batch(statements) {
+  const rawDb={ hook:null, prepare(sql) { let values=[]; return { sql, bind(...args) {values=args;return this;}, async all() { const args=/\?\d/.test(sql)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values; return {success:true,results:sqlite.prepare(sql).all(...args)}; } }; }, async batch(statements) {
     if (statements.some(s=>s.sql.startsWith('UPDATE tournaments')) && this.hook) { const hook=this.hook; this.hook=null;hook(); }
     sqlite.exec('BEGIN'); try { const results=[]; for (const s of statements) results.push(await s.all()); sqlite.exec('COMMIT'); return results; } catch(error) {sqlite.exec('ROLLBACK');throw error;}
   }};
+sqlite.exec(readFileSync('migrations/0010_admin_audit_log.sql','utf8'));
+const db=testAdminDatabase(rawDb,sqlite);
+
   await saveSetup(db,'test-cup',setupForm(await readSetup(db,'test-cup')));
   return {sqlite,db};
 }

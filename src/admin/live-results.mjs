@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError } from './tournaments.mjs';
 import { playedMapGuard } from './map-assignments.mjs';
 
@@ -41,6 +42,7 @@ export function seriesWinner(score1, score2, type, count) {
 }
 
 export async function saveLiveResult(db, id, form) {
+  db=mutationDatabase(db,form.intent==='confirm-walkover'?'FULL_WALKOVER':'SAVE_RESULT',form.match_id);
   const state = await readLiveResults(db, id);
   if (state.historical) throw new AdminError('Historical S1/S2 results are read-only.', 409);
   if (form.result_revision !== state.revision) throw new AdminError('The bracket changed. Reload before saving the score.', 409);

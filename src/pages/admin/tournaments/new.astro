@@ -2,8 +2,9 @@
 export const prerender=false;
 import {env} from 'cloudflare:workers';
 import AdminLayout from '../../../layouts/AdminLayout.astro';
-import {AdminError,createTournamentWithSetup,readCreateForm,requireLocalAdmin} from '../../../admin/tournaments.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+import {AdminError,createTournamentWithSetup,readCreateForm} from '../../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../../admin/auth.mjs';
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let message='';let values:Record<string,string>={name:'',start_date:'',end_date:'',is_test:'0',bracket_size:'16',map_count:'3',action_seconds:'20',reserve_seconds:'90',bronze_match:'1'};
 if(Astro.request.method==='POST')try{
   values=await readCreateForm(Astro.request);

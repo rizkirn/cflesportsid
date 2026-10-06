@@ -3,13 +3,14 @@ export const prerender=false;
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import Status from '../../components/admin/StatusBadge.astro';
-import { listTournaments,requireLocalAdmin } from '../../admin/tournaments.mjs';
+import {listTournaments} from '../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../admin/auth.mjs';
 import { readParticipantState } from '../../admin/participants.mjs';
 import { rosterReadiness } from '../../admin/roster-snapshot.mjs';
 import { readLiveResults } from '../../admin/live-results.mjs';
 import { readMapContext,playedMapStatus } from '../../admin/map-assignments.mjs';
 import {readCompletion} from '../../admin/completion.mjs';
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let tournaments=[];let activity=[];let failed=false;
 try {
  tournaments=await listTournaments(db);

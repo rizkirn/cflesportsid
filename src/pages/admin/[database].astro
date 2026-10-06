@@ -4,11 +4,12 @@ import {env} from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import AssetEditor from '../../components/admin/AssetEditor.astro';
 import MasterFields from '../../components/admin/MasterFields.astro';
-import {AdminError,requireLocalAdmin} from '../../admin/tournaments.mjs';
+import {AdminError} from '../../admin/tournaments.mjs';
+import {authorizeAdmin} from '../../admin/auth.mjs';
 import {masterDefinitions,masterRevision,readMasterForm,saveMaster} from '../../admin/master-data.mjs';
 const key=Astro.params.database!;const definition=Object.hasOwn(masterDefinitions,key)?masterDefinitions[key]:null;
 if(!definition)Astro.response.status=404;
-const db=requireLocalAdmin(Astro.request,import.meta.env.DEV,env);
+const db=(await authorizeAdmin(Astro.request,import.meta.env.DEV,env)).db;
 let rows=[];let teams=[];let failed=false;let message='';let submitted;let history=[];
 if(definition)try{
  if(Astro.request.method==='POST'){submitted=await readMasterForm(Astro.request,key);const id=await saveMaster(db,key,Astro.url.searchParams.get('selected'),submitted);return Astro.redirect(`/admin/${key}?selected=${encodeURIComponent(id)}&saved=1`,303);}

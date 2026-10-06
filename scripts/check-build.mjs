@@ -43,8 +43,13 @@ for (const [page, html] of renderedPages) {
     if (runtime && (routes.has(path.replace(/\/$/, '') || '/') || path === '/_image')) continue;
     const target = path.startsWith('/') ? resolve(root, `.${path}`) : resolve(dirname(page), path);
     if (!(await exists(target)) && !(await exists(join(target, 'index.html')))) {
-      const fallback = tag === 'img' && attrs.onerror?.match(/this\.src='(\/[^']+)'/)?.[1];
-      if (!fallback || !(await exists(resolve(root, `.${fallback}`)))) errors.push(`${page}: missing ${ref}`);
+      const handler = attrs.onerror?.replaceAll('&quot;', '"').replaceAll('&#39;', "'").replaceAll('&amp;', '&');
+      const single = handler?.match(/this\.src='(\/[^']+)'/)?.[1];
+      let fallbacks = single ? [single] : [];
+      const chain = handler?.match(/const sources=(\[[^;]*\]);/)?.[1];
+      if (tag === 'img' && chain) { try { fallbacks = JSON.parse(chain); } catch {} }
+      const hasFallback = tag === 'img' && (await Promise.all(fallbacks.filter(path => typeof path === 'string' && path.startsWith('/')).map(path => exists(resolve(root, `.${path}`))))).some(Boolean);
+      if (!hasFallback) errors.push(`${page}: missing ${ref}`);
     }
   }
   if (!description || canonicals !== 1) errors.push(`${page}: missing description or canonical`);

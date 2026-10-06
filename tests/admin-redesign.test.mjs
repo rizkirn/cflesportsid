@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,12 +11,14 @@ import {saveMaster,masterRevision} from '../src/admin/master-data.mjs';
 function fixture() {
   const sql=new DatabaseSync(':memory:');
   for(const file of readdirSync('migrations').filter(file=>file.endsWith('.sql')).sort())sql.exec(readFileSync('migrations/'+file,'utf8'));
-  const db={prepare(query){let values=[];const args=()=>/\?\d/.test(query)?[Object.fromEntries(values.map((value,index)=>['?'+(index+1),value]))]:values;return {
+  const rawDb={prepare(query){let values=[];const args=()=>/\?\d/.test(query)?[Object.fromEntries(values.map((value,index)=>['?'+(index+1),value]))]:values;return {
     bind(...args){values=args;return this;},
     async all(){return {success:true,results:sql.prepare(query).all(...args())};},
     async first(){return sql.prepare(query).get(...args())??null;},
     async run(){return {success:true,meta:{changes:Number(sql.prepare(query).run(...args()).changes)}};},
   };},async batch(statements){sql.exec('BEGIN');try {const results=[];for(const statement of statements)results.push(await statement.all());sql.exec('COMMIT');return results;}catch(error){sql.exec('ROLLBACK');throw error;}}};
+const db=testAdminDatabase(rawDb,sql);
+
   sql.exec(`INSERT INTO teams(id,name,tag,region) VALUES('a','Alpha','A','ID'),('b','Beta','B','ID');
     INSERT INTO players(id,name,current_ign,current_team_id) VALUES('p','Player','IGN','a');
     INSERT INTO maps(id,name) VALUES('map','Map');

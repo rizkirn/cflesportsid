@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import {AdminError,readAdminForm} from './tournaments.mjs';
 import {resultSnapshotSQL,seriesWinner} from './live-results.mjs';
 import {validateDetails} from './match-details.mjs';
@@ -94,6 +95,7 @@ export async function readCompletion(db,id){
 }
 export function readCompletionForm(request){return readAdminForm(request,{allowedField:key=>['intent','revision','confirmed'].includes(key)});}
 export async function completeTournament(db,id,form){
+  db=mutationDatabase(db,'COMPLETE_TOURNAMENT',id);
  const state=await readCompletion(db,id);if(!state)throw new AdminError('Tournament not found.',404);
  if(state.historical||state.status==='completed')throw new AdminError('Tournament is completed and read-only.',409);
  if(form.intent!=='complete-tournament'||form.confirmed!=='yes')throw new AdminError('Confirm tournament completion.');

@@ -1,3 +1,4 @@
+import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -10,6 +11,7 @@ import { saveResultCorrection, readCorrectionHistory } from '../src/admin/correc
 
 function fixture() {
   const sql=new DatabaseSync(':memory:');
+
   for(const file of ['0001_initial_schema.sql','0002_preserve_player_rounds.sql','0003_tournament_rosters.sql','0004_match_detail_edits.sql','0005_walkovers.sql','0006_match_corrections.sql','0007_test_tournaments.sql','0008_official_map_assignments.sql'])sql.exec(readFileSync('migrations/'+file,'utf8'));
   sql.exec(`INSERT INTO teams(id,name,tag,region) VALUES('a','Alpha','A','ID'),('b','Beta','B','ID');
     INSERT INTO tournaments(id,name,start_date,end_date,status,format) VALUES('cup','Cup','2026-10-01','2026-10-02','ongoing','single-elimination');
@@ -25,10 +27,13 @@ function fixture() {
     sql.prepare('INSERT INTO tournament_rosters VALUES(?,?,?,?,?)').run('cup',team,id,'Tournament '+id,n+1);
   }
   sql.exec(`INSERT INTO official_map_assignments(id,tournament_id,stage_id,round_id,match_id,source,scope,team1_id,team2_id,maps,actions) VALUES('fixture','cup','playoffs','semi','match','veto','match','a','b','["aztec","ankara","power"]','[]')`);
-  const db={hook:null,prepare(query){let values=[];return {query,bind(...args){values=args;return this;},async all(){return {success:true,results:sql.prepare(query).all(...(/\?\d/.test(query)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values))};}};},async batch(statements){
+  const rawDb={hook:null,prepare(query){let values=[];return {query,bind(...args){values=args;return this;},async all(){return {success:true,results:sql.prepare(query).all(...(/\?\d/.test(query)?[Object.fromEntries(values.map((v,i)=>['?'+(i+1),v]))]:values))};}};},async batch(statements){
     if(/^UPDATE (matches|tournaments)/.test(statements[0].query)&&this.hook){const hook=this.hook;this.hook=null;hook();}
     sql.exec('BEGIN');try {const result=[];for(const s of statements)result.push(await s.all());sql.exec('COMMIT');return result;}catch(e){sql.exec('ROLLBACK');throw e;}
   }};
+sql.exec(readFileSync('migrations/0010_admin_audit_log.sql','utf8'));
+const db=testAdminDatabase(rawDb,sql);
+
   return {sql,db};
 }
 function completePayload(state) {

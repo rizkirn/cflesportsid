@@ -1,3 +1,4 @@
+import {mutationDatabase} from './audit.mjs';
 import { AdminError, readAdminForm, testLifecycleAvailable } from './tournaments.mjs';
 import { readParticipantState, participantSnapshotSQL } from './participants.mjs';
 import { rosterReadiness } from './roster-snapshot.mjs';
@@ -109,6 +110,7 @@ async function atomic(db,statements) {
   catch(error){if(/NOT NULL constraint failed: tournaments.name|UNIQUE constraint failed|FOREIGN KEY constraint failed/.test(String(error?.message)))throw new AdminError('Roster, participants or player records changed while saving. Reload to review the saved state.',409);throw error;}
 }
 export async function saveRoster(db,id,form) {
+  db=mutationDatabase(db,'SAVE_ROSTER',id);
   const state=await readRosterState(db,id);editable(state,form.revision);
   if(form.player_id || form.new_name?.trim() || form.new_ign?.trim() || form.new_uid?.trim())throw new AdminError('Add the selected or new player to the roster before saving.');
   const rows=validateRosterRows(form.entries,state,form.team_id).map(row=>({...row,id:row.id||`player-${crypto.randomUUID()}`}));
@@ -120,6 +122,7 @@ export async function saveRoster(db,id,form) {
   await atomic(db,statements);return rows.length;
 }
 export async function moveRosterPlayer(db,id,form) {
+  db=mutationDatabase(db,'MOVE_ROSTER_PLAYER',id);
   const state=await readRosterState(db,id);editable(state,form.revision);
   if(form.player_id || form.new_name?.trim() || form.new_ign?.trim() || form.new_uid?.trim())throw new AdminError('Save or clear player drafts before moving a saved player.');
   const current=rosterForm(state,form.team_id);
@@ -196,6 +199,7 @@ export function editWorkspaceRoster(form, state) {
   validateWorkspaceRoster(candidate,state); return candidate;
 }
 export async function saveWorkspaceRoster(db, id, form) {
+  db=mutationDatabase(db,'SAVE_ROSTER',id);
   const state = await readRosterState(db,id); editable(state,form.revision);
   if (form.player_id || form.new_name?.trim() || form.new_ign?.trim() || form.new_uid?.trim()) throw new AdminError('Add or clear player drafts before saving.');
   const positions = new Map();
