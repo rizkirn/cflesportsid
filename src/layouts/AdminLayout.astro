@@ -6,6 +6,18 @@ import type { ParticipantState } from '../admin/participants.mjs';
 import { rosterReadiness } from '../admin/roster-snapshot.mjs';
 interface Props { title: string; workspace?: ParticipantState | null; }
 const { title, workspace } = Astro.props;
+const hostname = Astro.url.hostname;
+const adminEnvironment =
+  hostname === 'cflesports.com'
+    ? 'Production'
+    : hostname === 'cflesportsid-uat.cflid.workers.dev'
+      ? 'UAT'
+      : 'Development';
+
+const adminEnvironmentLabel =
+  adminEnvironment === 'Development'
+    ? 'Local admin · Development'
+    : `Admin · ${adminEnvironment}`;
 const savedState = workspace ? JSON.parse(workspace.snapshot) : null;
 const roster = workspace ? rosterReadiness(workspace.participants, savedState.roster ?? savedState.participants.roster) : null;
 const base = workspace ? `/admin/tournaments/${workspace.tournament.id}` : '';
@@ -20,7 +32,7 @@ const sections = workspace ? [
 ---
 <Layout title={`${title} | CFL Esports ID Admin`} noindex admin>
   <div class="admin-page admin-shell">
-    <aside class="admin-global"><a href="/admin" class="admin-brand"><span>CFL</span> Operations</a><span class="admin-help">Local admin · Staging</span><details class="admin-menu" open><summary>Admin Menu</summary><nav aria-label="Admin">
+    <aside class="admin-global"><a href="/admin" class="admin-brand"><span>CFL</span> Operations</a><span class="admin-help">{adminEnvironmentLabel}</span><details class="admin-menu" open><summary>Admin Menu</summary><nav aria-label="Admin">
       <a href="/admin" aria-current={Astro.url.pathname==='/admin'?'page':undefined}>Overview</a>
       <a href="/admin/tournaments" aria-current={Astro.url.pathname.startsWith('/admin/tournaments')?'page':undefined}>Tournaments</a>
       <h2>Database</h2>{['Teams','Players','Maps'].map(label=><a href={`/admin/${label.toLowerCase()}`} aria-current={Astro.url.pathname===`/admin/${label.toLowerCase()}`?'page':undefined}>{label}</a>)}
