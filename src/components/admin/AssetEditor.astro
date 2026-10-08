@@ -5,24 +5,28 @@ const labels={teams:'Logo',players:'Photo',maps:'Image',tournaments:'Poster'};
 const fields={teams:'logo_asset_key',players:'photo_asset_key',maps:'image_asset_key',tournaments:'poster_asset_key'};
 const asset=resolveAsset(category,entity);
 ---
-<section class="detail-section" data-asset-editor data-endpoint={`/admin/assets/${category}/${encodeURIComponent(entity.id)}`}>
+<section class="detail-section" data-asset-editor data-asset-category={category} data-endpoint={`/admin/assets/${category}/${encodeURIComponent(entity.id)}`}>
  <h3>{labels[category]}</h3>
  <img class="master-asset-preview" data-asset-current hidden={!asset.src} src={asset.src??undefined} alt={`Current ${labels[category].toLowerCase()}`} onerror={assetErrorHandler(category,entity)}/>
  <form class="admin-form" data-asset-form data-asset-expected={entity[fields[category]]??''}>
-  <label>Select {labels[category].toLowerCase()}<input type="file" accept="image/webp,image/png,image/jpeg"/></label>
+  <label>Select {labels[category].toLowerCase()}<input type="file" accept="image/webp,.webp"/></label>
+  <p class="admin-muted">WebP · up to 5 MiB · 4096 × 4096 px</p>
   <img class="master-asset-preview" data-asset-preview hidden alt="Selected image preview"/>
   <div class="admin-actions"><button type="submit" class="admin-button" data-asset-upload disabled>{asset.reference?'Replace':'Upload'} {labels[category]}</button><button type="button" class="admin-outline" data-asset-revert hidden={!asset.reference}>Revert to local</button></div>
   <p role="status" aria-live="polite" data-asset-status></p>
  </form>
 </section>
 <script>
+ import {previewWebP} from '../../admin/webp-upload.mjs';
  document.querySelectorAll<HTMLElement>('[data-asset-editor]').forEach(editor=>{
  const form=editor.querySelector<HTMLFormElement>('form')!,file=form.querySelector<HTMLInputElement>('[type=file]')!,preview=form.querySelector<HTMLImageElement>('[data-asset-preview]')!,current=editor.querySelector<HTMLImageElement>('[data-asset-current]'),upload=form.querySelector<HTMLButtonElement>('[data-asset-upload]')!,revert=form.querySelector<HTMLButtonElement>('[data-asset-revert]')!,status=form.querySelector<HTMLElement>('[data-asset-status]')!;
- let url:string|undefined,pending=false;
- const clear=()=>{if(url)URL.revokeObjectURL(url);url=undefined;preview.hidden=true;preview.removeAttribute('src');};
- file.addEventListener('change',()=>{clear();status.textContent='';const image=file.files?.[0];upload.disabled=!image;if(!image)return;if(image.size>5*1024*1024||!['image/webp','image/png','image/jpeg'].includes(image.type)){status.textContent='Choose WebP, PNG or JPEG, 5 MiB or smaller.';upload.disabled=true;return;}url=URL.createObjectURL(image);preview.src=url;preview.hidden=false;});
- async function save(intent:string){if(pending)return;pending=true;upload.disabled=revert.disabled=file.disabled=true;status.textContent='Saving…';const data=new FormData();data.set('intent',intent);data.set('expected',form.dataset.assetExpected!);if(intent==='upload'&&file.files?.[0])data.set('image',file.files[0]);
- try{const response=await fetch(editor.dataset.endpoint!,{method:'POST',body:data});const result=await response.json();if(!response.ok)throw new Error(result.error);form.dataset.assetExpected=result.key??'';revert.hidden=!result.key;upload.textContent=upload.textContent?.replace(/^(Upload|Replace)/,result.key?'Replace':'Upload')??'';if(current){current.removeAttribute('srcset');current.dataset.assetFallbackIndex='0';current.hidden=!result.src;let index=0;const sources=[...new Set([result.legacy,result.fallback].filter(s=>s&&s!==result.src))];current.onerror=()=>{current.removeAttribute('srcset');if(index<sources.length)current.src=sources[index++];else{current.onerror=null;current.hidden=true;}};if(result.src)current.src=result.src;}clear();file.value='';status.textContent=intent==='revert'?'Local image restored.':'Image saved.';}catch(error){status.textContent=error instanceof Error?error.message:'Could not save image.';}finally{pending=false;file.disabled=revert.disabled=false;upload.disabled=!file.files?.length;}}
+ let url:string|undefined,pending=false,selection=0,prepared:File|undefined;
+ const clear=()=>{if(url)URL.revokeObjectURL(url);url=undefined;prepared=undefined;preview.hidden=true;preview.removeAttribute('src');};
+ file.addEventListener('change',async()=>{const token=++selection;clear();upload.disabled=true;status.textContent='';const image=file.files?.[0];if(!image)return;status.textContent='Checking image…';
+ try{const result=await previewWebP(image,editor.dataset.assetCategory!);if(token!==selection)return;prepared=image;url=URL.createObjectURL(image);preview.src=url;preview.hidden=false;status.textContent=`WebP · ${result.width} × ${result.height} px · ${(image.size/1024).toFixed(1)} KiB`;upload.disabled=pending;}catch(error){if(token===selection)status.textContent=error instanceof Error?error.message:'Could not validate image.';}
+ });
+ async function save(intent:string){if(pending||intent==='upload'&&!prepared)return;selection++;pending=true;upload.disabled=revert.disabled=file.disabled=true;status.textContent='Saving…';const data=new FormData();data.set('intent',intent);data.set('expected',form.dataset.assetExpected!);if(intent==='upload'&&prepared)data.set('image',prepared);
+ try{const response=await fetch(editor.dataset.endpoint!,{method:'POST',body:data});const result=await response.json();if(!response.ok)throw new Error(result.error);form.dataset.assetExpected=result.key??'';revert.hidden=!result.key;upload.textContent=upload.textContent?.replace(/^(Upload|Replace)/,result.key?'Replace':'Upload')??'';if(current){current.removeAttribute('srcset');current.dataset.assetFallbackIndex='0';current.hidden=!result.src;let index=0;const sources=[...new Set([result.legacy,result.fallback].filter(s=>s&&s!==result.src))];current.onerror=()=>{current.removeAttribute('srcset');if(index<sources.length)current.src=sources[index++];else{current.onerror=null;current.hidden=true;}};if(result.src)current.src=result.src;}clear();file.value='';status.textContent=intent==='revert'?'Local image restored.':'Image saved.';}catch(error){status.textContent=error instanceof Error?error.message:'Could not save image.';}finally{pending=false;file.disabled=revert.disabled=false;upload.disabled=!prepared;}}
  form.addEventListener('submit',event=>{event.preventDefault();void save('upload');});revert.addEventListener('click',()=>void save('revert'));window.addEventListener('pagehide',clear,{once:true});
  });
 </script>

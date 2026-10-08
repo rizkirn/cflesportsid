@@ -2,6 +2,8 @@ import {testAdminDatabase} from './helpers/admin-database.mjs';
 import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import {DatabaseSync} from 'node:sqlite';
 import {inspectImage,validateImage,MAX_IMAGE_BYTES} from '../src/admin/image-validation.mjs';import {saveAsset,readAssetRequest,assetEntity} from '../src/admin/assets.mjs';import {requireLocalAdmin} from '../src/admin/tournaments.mjs';
 import webp,{init as initWebp} from '@jsquash/webp/decode.js';import png,{init as initPng} from '@jsquash/png/decode.js';import jpeg,{init as initJpeg} from '@jsquash/jpeg/decode.js';
+import sharp from 'sharp';
+import {previewWebP} from '../src/admin/webp-upload.mjs';
 await initWebp(new WebAssembly.Module(fs.readFileSync('node_modules/@jsquash/webp/codec/dec/webp_dec.wasm')));await initPng(new WebAssembly.Module(fs.readFileSync('node_modules/@jsquash/png/codec/pkg/squoosh_png_bg.wasm')));await initJpeg(new WebAssembly.Module(fs.readFileSync('node_modules/@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm')));
 const decode=async(b,f)=>({webp,png,jpeg}[f])(b.slice().buffer,{preserveOrientation:true});
 const bytes=new Uint8Array(fs.readFileSync('public/logos/FNOV.webp'));const image=new File([bytes],'logo.webp',{type:'image/webp'});
@@ -9,6 +11,33 @@ function fixture(){const sql=new DatabaseSync(':memory:');for(const migration of
 const db=testAdminDatabase(rawDb,sql);
 const objects=new Map();const bucket={head:async key=>objects.get(key)??null,put:async(key,value)=>{objects.set(key,value);return{};}};return{sql,db,bucket,objects};}
 test('real decoder validates pixels and metadata for repository WebP',async()=>{const info=await validateImage(bytes,'teams',{filename:image.name,mime:image.type,decode});assert.equal(info.format,'webp');assert.ok(info.width>0&&info.height>0);});
+test('all categories accept large real WebP images through 4096 square without resizing',async()=>{
+ for(const [width,height]of [[1920,1080],[2048,2048],[3000,1500],[4096,4096]]){
+  const data=new Uint8Array(await sharp({create:{width,height,channels:4,background:{r:255,g:0,b:0,alpha:0.5}}}).webp({lossless:true}).toBuffer());
+  for(const category of ['teams','players','maps','tournaments'])assert.deepEqual([inspectImage(data,category).width,inspectImage(data,category).height],[width,height]);
+  const result=await validateImage(data,'teams',{filename:'prepared.webp',mime:'image/webp',decode});assert.deepEqual([result.width,result.height],[width,height]);
+ }
+});
+test('transparent original WebP bytes reach R2 unchanged in every category',async()=>{
+ const data=new Uint8Array(await sharp({create:{width:2,height:2,channels:4,background:{r:255,g:0,b:0,alpha:0}}}).webp({lossless:true}).toBuffer());
+ for(const [category,id]of [['teams','test-team'],['players','player-internal'],['maps','test-map'],['tournaments','test-tournament']]){
+  const f=fixture(),file=new File([data],'alpha.webp',{type:'image/webp'}),result=await saveAsset(f.db,f.bucket,category,id,{intent:'upload',expected:null,file},decode);
+  assert.deepEqual(f.objects.get(result.key),data);const pixels=await decode(f.objects.get(result.key),'webp');assert.equal(pixels.data[3],0);
+ }
+});
+test('client preview decodes the original file and releases resources without producing replacement bytes',async()=>{
+ let seen,closed=0;const info=inspectImage(bytes,'teams');const result=await previewWebP(image,'teams',{decode:async file=>{seen=file;return{...info,close(){closed++;}};}});
+ assert.equal(seen,image);assert.deepEqual(result,info);assert.equal(closed,1);assert.deepEqual(new Uint8Array(await image.arrayBuffer()),bytes);
+ await assert.rejects(previewWebP(image,'teams',{decode:async()=>{throw Error('invalid');}}));
+ await assert.rejects(previewWebP(new File([bytes],'renamed.png',{type:'image/png'}),'teams'),/Please convert/);
+});
+test('valid 4097px WebP and malformed or unsupported WebP never reach R2',async()=>{
+ const large=new Uint8Array(await sharp({create:{width:4097,height:1,channels:4,background:'red'}}).webp().toBuffer());
+ for(const category of ['teams','players','maps','tournaments'])await assert.rejects(validateImage(large,category,{decode}),/4096px/);
+ const duplicate=new Uint8Array(bytes.length*2-12);duplicate.set(bytes);duplicate.set(bytes.subarray(12),bytes.length);new DataView(duplicate.buffer).setUint32(4,duplicate.length-8,true);assert.throws(()=>inspectImage(duplicate,'teams'));
+ const f=fixture();for(const data of [large,bytes.subarray(0,30),new Uint8Array(MAX_IMAGE_BYTES+1)])await assert.rejects(saveAsset(f.db,f.bucket,'teams','test-team',{intent:'upload',expected:null,file:new File([data],'bad.webp',{type:'image/webp'})},decode));
+ assert.equal(f.objects.size,0);assert.equal(f.sql.prepare('SELECT count(*) n FROM admin_audit_log').get().n,0);
+});
 test('full decoding rejects a structurally plausible corrupt WebP bitstream',async()=>{const corrupt=bytes.slice();corrupt.fill(0,35);assert.throws(()=>inspectImage(corrupt,'teams'));const altered=bytes.slice();altered.fill(0,60);await assert.rejects(validateImage(altered,'teams',{decode}));});
 test('reject unsupported, truncated, oversized, extension and MIME mismatch',async()=>{for(const b of [bytes.subarray(0,bytes.length-1),new TextEncoder().encode('<svg/>'),new TextEncoder().encode('<html/>'),new Uint8Array([0x47,0x49,0x46])])assert.throws(()=>inspectImage(b,'teams'));assert.throws(()=>inspectImage(new Uint8Array(MAX_IMAGE_BYTES+1),'teams'),e=>e.status===413);for(const options of [{filename:'file.png'},{mime:'image/png'}])await assert.rejects(validateImage(bytes,'teams',{...options,decode}),e=>e.status===422);});
 test('four-category upload/revert updates only references and uses UID for player identity',async()=>{for(const [category,id,column]of [['teams','test-team','logo_asset_key'],['players','player-internal','photo_asset_key'],['maps','test-map','image_asset_key'],['tournaments','test-tournament','poster_asset_key']]){const f=fixture(),before=f.sql.prepare(`SELECT * FROM ${category} WHERE id=?`).get(id);const result=await saveAsset(f.db,f.bucket,category,id,{intent:'upload',expected:null,file:image},decode);assert.match(result.key,/\/[a-f0-9]{64}\.webp$/);assert.ok(f.objects.has(result.key));if(category==='players')assert.match(result.key,/^players\/1345266890\/avatar\//);await saveAsset(f.db,f.bucket,category,id,{intent:'revert',expected:result.key},decode);assert.deepEqual(f.sql.prepare(`SELECT * FROM ${category} WHERE id=?`).get(id),before);assert.ok(f.objects.has(result.key));}});
@@ -19,11 +48,11 @@ test('multipart reader enforces origin, field allowlist and bounded payload',asy
 test('production/UAT admin write guard remains closed even with staging bindings',()=>{const env={cflesportsid_staging:{},CFL_ASSETS:{}};for(const host of ['cflesports.com','cflesportsid-uat.cflid.workers.dev','localhost'])assert.throws(()=>requireLocalAdmin(new Request('https://'+host+'/admin/assets/teams/x'),false,env),e=>e.status===403);assert.throws(()=>requireLocalAdmin(new Request('http://localhost/admin',{headers:{'x-forwarded-for':'1.2.3.4'}}),true,env),e=>e.status===403);});
 
 const imageFixtures={"png": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAEklEQVQImWP40KDwoUGBAUIBAC8OBkEzIDWGAAAAAElFTkSuQmCC", "jpeg": "/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAB//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AL4AyJL/2Q=="};
-test('PNG and JPEG fully decode; corrupted/truncated streams fail',async()=>{for(const [format,b64]of Object.entries(imageFixtures)){const data=new Uint8Array(Buffer.from(b64,'base64'));const result=await validateImage(data,'players',{filename:'image.'+(format==='jpeg'?'jpg':format),mime:'image/'+format,decode});assert.equal(result.width,2);assert.equal(result.height,2);await assert.rejects(validateImage(data.subarray(0,data.length-2),'players',{decode}));}});
+test('new PNG and JPEG uploads require manual WebP conversion before decoding',async()=>{for(const [format,b64]of Object.entries(imageFixtures)){const data=new Uint8Array(Buffer.from(b64,'base64'));let calls=0;await assert.rejects(validateImage(data,'players',{filename:'image.'+(format==='jpeg'?'jpg':format),mime:'image/'+format,decode:async()=>{calls++;}}),e=>e.status===422&&e.message==='Please convert your image to WebP before uploading.');assert.equal(calls,0);}});
 test('reject animation, excessive dimensions/pixels before decoding and oversized multipart',async()=>{
  const extended=(width,height,animated=false)=>{const b=new Uint8Array(bytes.length+18);b.set(bytes.subarray(0,12));b.set(new TextEncoder().encode('VP8X'),12);new DataView(b.buffer).setUint32(16,10,true);b[20]=animated?2:0;for(let i=0;i<3;i++){b[24+i]=((width-1)>>>(8*i))&255;b[27+i]=((height-1)>>>(8*i))&255;}b.set(bytes.subarray(12),30);new DataView(b.buffer).setUint32(4,b.length-8,true);return b;};
  assert.throws(()=>inspectImage(extended(1,1,true),'teams'));
- const huge=bytes.slice();const v=new DataView(huge.buffer);let offset=12;while(!['VP8 ','VP8L'].includes(Buffer.from(huge.subarray(offset,offset+4)).toString()))offset+=8+v.getUint32(offset+4,true)+(v.getUint32(offset+4,true)&1);const type=Buffer.from(huge.subarray(offset,offset+4)).toString();if(type==='VP8 '){v.setUint16(offset+14,4096,true);v.setUint16(offset+16,4096,true);}else v.setUint32(offset+9,(4095|(4095<<14))>>>0,true);assert.throws(()=>inspectImage(huge,'maps'),e=>e.status===422);
+ const huge=bytes.slice();const v=new DataView(huge.buffer);let offset=12;while(!['VP8 ','VP8L'].includes(Buffer.from(huge.subarray(offset,offset+4)).toString()))offset+=8+v.getUint32(offset+4,true)+(v.getUint32(offset+4,true)&1);const type=Buffer.from(huge.subarray(offset,offset+4)).toString();if(type==='VP8 '){v.setUint16(offset+14,5000,true);v.setUint16(offset+16,5000,true);}else v.setUint32(offset+9,(4999|(4999<<14))>>>0,true);assert.throws(()=>inspectImage(huge,'maps'),e=>e.status===422);
  const stream=new ReadableStream({start(controller){controller.enqueue(new Uint8Array(MAX_IMAGE_BYTES+65537));controller.close();}});await assert.rejects(readAssetRequest(new Request('http://localhost/admin/assets/teams/x',{method:'POST',headers:{origin:'http://localhost','content-type':'multipart/form-data; boundary=test'},body:stream,duplex:'half'})),e=>e.status===413);
 });
 test('asset upload audit failure leaves only an orphan object, with no active reference or event',async()=>{const f=fixture();f.sql.exec("CREATE TRIGGER reject_audit BEFORE INSERT ON admin_audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable');END");await assert.rejects(saveAsset(f.db,f.bucket,'teams','test-team',{intent:'upload',expected:null,file:image},decode));assert.equal(f.objects.size,1);assert.equal(f.sql.prepare('SELECT logo_asset_key FROM teams').get().logo_asset_key,null);assert.equal(f.sql.prepare('SELECT count(*) n FROM admin_audit_log').get().n,0);});
