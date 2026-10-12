@@ -6,7 +6,7 @@ import MatchInsights from '../../components/MatchInsights.astro';
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { matchPlayerProfile } from '../../utils/player-continuity.mjs';
+import { matchPlayerProfile } from '../../data-access/frontend-public';
 import { getRoundName, getParticipantLabel } from '../../utils/tournament';
 
 import {
@@ -114,7 +114,7 @@ const playerStats = (m.data.playerStats || [])
       avatarLegacy: resolveAsset('players', player ?? {data:{uid:ps.uid}}).legacy,
 
       ign:
-        ps.playerId ? (ps.ign || ps.uid) : player
+        ps.playerId && ps.ign ? ps.ign : player
           ? player.data.ign
           : (ps.ign || ps.uid),
 
@@ -177,9 +177,7 @@ function getRoundMVP(roundIdx) {
     uid,
 
     ign:
-      m.data.playerStats.some(p => p.playerId && p.uid === uid) ? (ps?.ign || uid) : player
-        ? player.data.ign
-        : (ps ? ps.ign : uid),
+      ps?.ign || player?.data.ign || uid,
 
     teamTag: ps?.teamTag,
 

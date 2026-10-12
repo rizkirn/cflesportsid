@@ -4,12 +4,12 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { statisticalProfiles } from '../../utils/player-continuity.mjs';
+import { statisticalProfiles } from '../../data-access/frontend-public';
 import {
   calculateStatistics,
   emptyMapStats,
   kdRatio
-} from '../../utils/statistics';
+} from '../../data-access/frontend-public';
 import { getRoundName } from '../../utils/tournament';
 
 const map = (await getCollection('maps')).find(entry => entry.id === Astro.params.id);

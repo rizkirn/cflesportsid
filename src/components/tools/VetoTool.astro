@@ -1,4 +1,5 @@
 ---
+import {publicVetoMapCatalog} from '../../data-access/frontend-public';
 import { getFrontendMatches } from '../../data-access/frontend-matches';
 
 import economySettings from '../../data/veto/economy.json';
@@ -31,7 +32,7 @@ for (const tournament of tournamentsMap.values()) {
   for (const stage of tournament.data.stages) {
     vetoConfigs.set(
       `${tournament.id}:${stage.id}`,
-      resolveVeto(stage, mapsMap)
+      resolveVeto(stage, publicVetoMapCatalog(stage, mapsMap))
     );
   }
 }
@@ -1468,6 +1469,7 @@ if(official){
 <script type="application/json" id="map-image-errors" set:html={JSON.stringify(mapImageErrors).replace(/</g, '\\u003c')} />
 <script>
  import {applyVetoAction,remainingVetoMaps,resolveVetoResult} from '../../utils/veto-engine.mjs';
+ import {renderVetoSteps} from '../../utils/veto-steps-dom.mjs';
   (function() {
     const matchData = JSON.parse(
       document.getElementById('match-data').textContent
@@ -2089,89 +2091,16 @@ if(official){
     }
 
     function renderSteps() {
-      const tagA =
-        state.match
-          ? state.match.team1.tag
-          : 'A';
-
-      const tagB =
-        state.match
-          ? state.match.team2.tag
-          : 'B';
-
-      const html =
-        VETO_STEPS.map(
-          (step, i) => {
-            const done =
-              i < state.currentStep;
-
-            const active =
-              i === state.currentStep;
-
-            const history =
-              state.vetoHistory[i];
-
-            const cls =
-              `veto-step team-${step.team.toLowerCase()} ` +
-              `${active && state.phase === 'veto' ? 'active' : ''} ` +
-              `${done ? 'done' : ''}`;
-
-            const tag =
-              step.team === 'A'
-                ? tagA
-                : tagB;
-
-            const mapHtml =
-              history
-                ? history.voided
-                  ? `<span class="step-void">VOID</span>`
-                  : `<span class="step-map">${mapName(history.map)}</span>`
-                : '';
-
-            return `
-              <div class="${cls}" role="listitem">
-                <span class="step-team">${escapeHTML(tag)}</span>
-                <span class="step-action ${step.action}">
-                  ${step.action === 'ban' ? 'Ban' : 'Pick'}
-                </span>
-                ${mapHtml}
-              </div>
-            `;
-          }
-        ).join('') +
-        `
-          <div
-            class="veto-step ${
-              state.phase === 'wheel'
-                ? 'active'
-                : ''
-            } ${
-              state.phase === 'result'
-                ? 'done'
-                : ''
-            }"
-            role="listitem"
-          >
-            <span
-              class="step-team"
-              style="color:#facc15"
-            >
-              ★
-            </span>
-
-            <span class="step-action">
-              Wheel
-            </span>
-
-            ${
-              state.picks.decider
-                ? `<span class="step-map">${mapName(state.picks.decider)}</span>`
-                : ''
-            }
-          </div>
-        `;
-
-      $('veto-steps').innerHTML = html;
+      renderVetoSteps($('veto-steps'), {
+        steps: VETO_STEPS,
+        history: state.vetoHistory,
+        currentStep: state.currentStep,
+        phase: state.phase,
+        tagA: state.match ? state.match.team1.tag : 'A',
+        tagB: state.match ? state.match.team2.tag : 'B',
+        decider: state.picks.decider,
+        mapName,
+      });
     }
 
     function renderPrompt() {

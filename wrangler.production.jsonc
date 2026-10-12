@@ -1,0 +1,62 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "cflesportsid",
+  "account_id": "bf6ed4ccd73133871881b47ea58dae3d",
+  "main": "dist/server/entry.mjs",
+  "no_bundle": true,
+  "find_additional_modules": true,
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [
+        "**/*.js",
+        "**/*.mjs"
+      ]
+    }
+  ],
+  "compatibility_date": "2026-09-30",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "cflesports.com",
+      "custom_domain": true,
+      "zone_id": "c8fed6ca36bcc7f2a22cd1b6aa713091",
+      "enabled": true,
+      "previews_enabled": false
+    }
+  ],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "dist/client",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none",
+    "run_worker_first": false
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cflesportsid",
+      "database_id": "efded3c4-1cf9-46a9-823e-d0f2d17c683a"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "CFL_ASSETS",
+      "bucket_name": "cflesportsid-assets-production"
+    }
+  ],
+  "keep_vars": true,
+  "vars": {
+    "CFL_PUBLIC_MODE": "d1",
+    "CFL_PUBLIC_ENVIRONMENT": "production",
+    "CFL_PUBLIC_ACCOUNT_ID": "bf6ed4ccd73133871881b47ea58dae3d",
+    "CFL_PUBLIC_WORKER": "cflesportsid",
+    "CFL_PUBLIC_HOSTNAME": "cflesports.com",
+    "CFL_PUBLIC_DATABASE_ID": "efded3c4-1cf9-46a9-823e-d0f2d17c683a"
+  },
+  "send_metrics": false
+}

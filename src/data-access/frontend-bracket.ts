@@ -1,8 +1,9 @@
+import {selectPublicCollection} from './frontend-public';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { env } from 'cloudflare:workers';
 import { overlayAssetReferences } from '../utils/assets.mjs';
 
-export async function getFrontendTeams(): Promise<CollectionEntry<'teams'>[]> {
+async function getHybridTeams(): Promise<CollectionEntry<'teams'>[]> {
   const legacy = await getCollection('teams');
   try {
     const result = await env.DB.prepare('SELECT * FROM teams ORDER BY id').all<any>();
@@ -18,7 +19,7 @@ export async function getFrontendTeams(): Promise<CollectionEntry<'teams'>[]> {
   }
 }
 
-export async function getFrontendTournaments(): Promise<CollectionEntry<'tournaments'>[]> {
+async function getHybridTournaments(): Promise<CollectionEntry<'tournaments'>[]> {
   const legacy = await getCollection('tournaments');
   try {
     const queries = ['SELECT * FROM tournaments ORDER BY id', 'SELECT * FROM tournament_stages ORDER BY tournament_id,id',
@@ -43,3 +44,6 @@ export async function getFrontendTournaments(): Promise<CollectionEntry<'tournam
     return legacy;
   }
 }
+
+export function getFrontendTeams() {return selectPublicCollection('teams',getHybridTeams);}
+export function getFrontendTournaments() {return selectPublicCollection('tournaments',getHybridTournaments);}

@@ -4,7 +4,7 @@ import { getFrontendTeams } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getCollection } from 'astro:content';
-import { calculateStatistics, emptyStats } from '../../utils/statistics';
+import { calculateStatistics, emptyStats } from '../../data-access/frontend-public';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 
 const allMatches = await getFrontendMatches();

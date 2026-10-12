@@ -1,0 +1,18 @@
+{
+  "registrationsHash": "73a3a5ad606427f1101cb7400ce10f9433278db98154e717a2df0863fc0e7b42",
+  "backfillHash": "5e519fc59cdc908199c2e3d099c8d2630e82ebef1b155f77c9a34d3665b3f176",
+  "boundaries": [
+    {
+      "id": "clash-for-glory-s1",
+      "start_date": "2026-08-22",
+      "end_date": "2026-08-23",
+      "is_test": 0
+    },
+    {
+      "id": "clash-for-glory-s2",
+      "start_date": "2026-09-26",
+      "end_date": "2026-09-27",
+      "is_test": 0
+    }
+  ]
+}

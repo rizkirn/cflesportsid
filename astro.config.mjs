@@ -6,8 +6,9 @@ import { readdirSync } from 'node:fs';
 import { playerContinuitySplits } from './src/config/player-continuity.mjs';
 import { historicalPlayerKey } from './src/utils/player-continuity.mjs';
 
+const productionD1 = process.env.CFL_PUBLIC_BUILD_TARGET === 'production-d1';
 const site = 'https://cflesports.com';
-const detailPages = [['matches', 'matches'], ['teams', 'teams'], ['players', 'players'], ['maps', 'maps'], ['tournaments', 'tournament']]
+const detailPages = productionD1 ? [] : [['matches', 'matches'], ['teams', 'teams'], ['players', 'players'], ['maps', 'maps'], ['tournaments', 'tournament']]
   .flatMap(([collection, route]) => readdirSync(new URL(`./src/data/${collection}/`, import.meta.url))
     .filter(file => file.endsWith('.json'))
     .map(file => `${site}/${route}/${file.slice(0, -5)}/`));
@@ -19,5 +20,5 @@ export default defineConfig({
   }),
   session: false,
   prefetch: true,
-  integrations: [sitemap({ customPages: [...detailPages, ...playerContinuitySplits.map(split => `${site}/players/${historicalPlayerKey(split)}/`)], filter: url => !new URL(url).pathname.startsWith('/admin') })],
+  integrations: productionD1 ? [] : [sitemap({ customPages: [...detailPages, ...playerContinuitySplits.map(split => `${site}/players/${historicalPlayerKey(split)}/`)], filter: url => !new URL(url).pathname.startsWith('/admin') })],
 });

@@ -62,7 +62,10 @@ export function resolveVeto(
   }
 
   return {
-    ...config,
+    steps: config.steps,
+    finalMap: config.finalMap,
+    actionSeconds: config.actionSeconds,
+    reserveSeconds: config.reserveSeconds,
     maps: pool
   };
 }

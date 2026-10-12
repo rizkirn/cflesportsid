@@ -4,12 +4,12 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { statisticalProfiles, statisticalPlayerKey, playerContinuitySplits, historicalPlayerKey } from '../../utils/player-continuity.mjs';
+import { statisticalProfiles, statisticalPlayerKey, getPlayerContinuitySplits, historicalPlayerKey } from '../../data-access/frontend-public';
 import {
   calculateStatistics,
   emptyStats,
   kdRatio
-} from '../../utils/statistics';
+} from '../../data-access/frontend-public';
 
 import {
   getRoundName,
@@ -29,7 +29,7 @@ const allPlayers = await getCollection('players');
 const profiles = statisticalProfiles(allPlayers);
 const player = profiles.find(entry => entry.id === Astro.params.id);
 if (!player) return new Response(null, { status: 404 });
-const split = playerContinuitySplits.find(s => s.uid === player.data.uid);
+const split = getPlayerContinuitySplits().find(s => s.uid === player.data.uid);
 const otherSegment = split ? profiles.find(p => p.id === (player.id === split.uid ? historicalPlayerKey(split) : split.uid)) : undefined;
 const isHistoricalSegment = Boolean(split && player.id !== split.uid);
 

@@ -3,7 +3,7 @@ import { getFrontendMatches } from '../../data-access/frontend-matches';
 import { getFrontendTeams, getFrontendTournaments } from '../../data-access/frontend-bracket';
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
-import { calculateStatistics } from '../../utils/statistics';
+import { calculateStatistics } from '../../data-access/frontend-public';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { getCollection, type CollectionEntry } from 'astro:content';
 import { getParticipantLabel, getSourceNode, resolveSourceTeam, validateTournament } from '../../utils/tournament';

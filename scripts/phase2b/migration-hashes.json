@@ -1,0 +1,13 @@
+{
+  "0001_initial_schema.sql": "188da45aa72f45c7d1c59414055bfd51c4044cd6306f4d89cc64aa681ef106cc",
+  "0002_preserve_player_rounds.sql": "002a9532990115296306664196ee80874154ad010fc74ca8b1e99e6e958e8d34",
+  "0003_tournament_rosters.sql": "886118108e04105ac5b389ddb275bdd1871abe241a6487d1d6ecbf2d45f8b102",
+  "0004_match_detail_edits.sql": "50bbd67495f207ec96acac75bd5041c3075e7811d0c252902040bafc6f0265e2",
+  "0005_walkovers.sql": "088a861dc4ba1efee415557ff71149d778c248c3b481c6c7a29d4bb98b322a69",
+  "0006_match_corrections.sql": "d994a0403151dcab6e02193411cc1c26baac5b9da4c0bd59e19cbd594c595bd0",
+  "0007_test_tournaments.sql": "84d039dcbc9bee518405da4d0284a0360065e4a8393feed71917a0781de57490",
+  "0008_official_map_assignments.sql": "3c92e427b64b7f33a6971bd665c0f45ef89604eafbd34c55f60631613e2b3abe",
+  "0009_r2_asset_references.sql": "07f2516f1c7cf9ba117c21d2fde36e94de0cf64920b560f4372baf9db6468693",
+  "0010_admin_audit_log.sql": "7cb06eed3783a3c2e276317a0bc88e75361ad6ebbe0ffa515524a72be5b7c16a",
+  "0011_public_identity_contracts.sql": "6796ab50117db75baa7050d9346f111bd5d4f4e0c7d61ab96c915f770a701860"
+}

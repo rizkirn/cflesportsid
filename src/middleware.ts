@@ -1,10 +1,19 @@
+import {publicRequest} from './data-access/frontend-public';
+import {publicErrorResponse,PublicDataError} from './data-access/public-d1.mjs';
 import { defineMiddleware } from 'astro:middleware';
 import {AdminError} from './admin/tournaments.mjs';
 import {authorizeAdmin,isAdminPath,legacyOfficialLocation} from './admin/auth.mjs';
 
 export const onRequest = defineMiddleware(async (context, next) => {
   const officialTool = ['/map-randomizer', '/veto'].includes(context.url.pathname.replace(/\/$/, '')) && context.url.searchParams.has('adminTournament');
-  if (!officialTool && !isAdminPath(context.url.pathname)) return next();
+  if (!officialTool && !isAdminPath(context.url.pathname)) {
+    if (context.isPrerendered) return next();
+    const {env} = await import('cloudflare:workers');
+    const bindings = env as unknown as Record<string, unknown>;
+    if (!bindings.CFL_PUBLIC_MODE || bindings.CFL_PUBLIC_MODE === 'hybrid') return next();
+    try {return await publicRequest(bindings,import.meta.env.DEV,context.url,next);}
+    catch(error) {if(error instanceof PublicDataError || error instanceof Error && ['LOCAL_PUBLIC_MODE_REQUIRED','UAT_PUBLIC_MODE_REQUIRED','PRODUCTION_PUBLIC_MODE_REQUIRED'].includes(error.message))return publicErrorResponse(error);throw error;}
+  }
   const headers = {
     'Cache-Control': 'no-store',
     'X-Robots-Tag': 'noindex, nofollow',

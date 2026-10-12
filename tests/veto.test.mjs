@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { z } from 'zod';
 import {applyVetoAction,remainingVetoMaps,resolveVetoResult} from '../src/utils/veto-engine.mjs';
+import {renderVetoSteps} from '../src/utils/veto-steps-dom.mjs';
 const schemaSource = fs.readFileSync('src/content.config.ts', 'utf8')
   .replace(/^import .*;\n/gm, '').replace('export const collections =', 'globalThis.collections =');
 const schemaContext = { z, defineCollection: value => value, glob: value => value };
@@ -50,9 +51,10 @@ test('stages without veto settings remain unavailable', () => {
 });
 test('switching matches cancels a pending wheel and starts a fresh configured session', () => {
   const elements = new Map();
+  const document = {createElement: () => ({style:{},setAttribute(){},append(){}}),getElementById: id => el(id),querySelectorAll: () => []};
   const drawing = new Proxy({}, { get: () => () => {} });
   const el = id => {
-    if (!elements.has(id)) elements.set(id, { style: {}, classList: { add() {}, remove() {} }, addEventListener(event, fn) { this[event] = fn; }, getContext: () => drawing, width: 320, height: 320 });
+    if (!elements.has(id)) elements.set(id, { ownerDocument:document,replaceChildren(){},style: {}, classList: { add() {}, remove() {} }, addEventListener(event, fn) { this[event] = fn; }, getContext: () => drawing, width: 320, height: 320 });
     return elements.get(id);
   };
   const veto = context.exports.resolveVeto(stage, maps);
@@ -63,7 +65,7 @@ test('switching matches cancels a pending wheel and starts a fresh configured se
   el('map-image-errors').textContent='{}';
   const pending = new Map(); let timer = 0;
   const script = fs.readFileSync('src/components/tools/VetoTool.astro', 'utf8').split('<script>')[1].split('</script>')[0].replace(/^\s*import .*;\s*$/gm,'');
-  const sandbox = {applyVetoAction,remainingVetoMaps,resolveVetoResult, document: { getElementById: el, querySelectorAll: () => [] }, location: { search: '' }, URLSearchParams, setInterval: () => 1, clearInterval() {}, setTimeout(fn) { pending.set(++timer, fn); return timer; }, clearTimeout(id) { pending.delete(id); }, requestAnimationFrame(fn) { fn(); } };
+  const sandbox = {renderVetoSteps,applyVetoAction,remainingVetoMaps,resolveVetoResult, document, location: { search: '' }, URLSearchParams, setInterval: () => 1, clearInterval() {}, setTimeout(fn) { pending.set(++timer, fn); return timer; }, clearTimeout(id) { pending.delete(id); }, requestAnimationFrame(fn) { fn(); } };
   vm.runInNewContext(script.replace('    init();', '    globalThis.api = { onMapClick, spinWheel, voidCurrentStep, tick, getState: () => state }; init();'), sandbox);
   el('match-select').change({ target: { value: 'm01' } });
   for (let i = 0; i < 25; i++) sandbox.api.tick();

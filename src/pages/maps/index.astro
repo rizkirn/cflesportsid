@@ -7,7 +7,7 @@ import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import {
   calculateStatistics,
   emptyMapStats
-} from '../../utils/statistics';
+} from '../../data-access/frontend-public';
 
 const calculated = calculateStatistics(
   await getFrontendMatches()

@@ -8,7 +8,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "test": "node --experimental-sqlite --test tests/*.test.mjs",
+    "test": "node --experimental-sqlite --test tests/*.test.mjs tests/*.test.cjs",
     "data:check": "node scripts/check-data.mjs",
     "data:new-match": "node scripts/new-match.mjs",
     "build:check": "node scripts/check-build.mjs",
@@ -17,7 +17,9 @@
     "db:seed:local": "wrangler d1 execute cflesportsid --local --file=.generated/seed-s1-s2.sql",
     "db:validate": "wrangler d1 execute cflesportsid --local --file=scripts/validate-d1.sql",
     "db:parity": "node scripts/check-d1-parity.mjs",
-    "test:frontend": "npm run build && node tests/frontend-pages.integration.mjs"
+    "test:frontend": "npm run build && node tests/frontend-pages.integration.mjs",
+    "build:production": "CFL_PUBLIC_BUILD_TARGET=production-d1 CFL_ADMIN_CONFIG=wrangler.production-build.jsonc astro build",
+    "test:production-tooling": "node --test tests/production-upload-*.test.cjs tests/production-deployment-config.test.mjs"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.3",

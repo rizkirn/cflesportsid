@@ -4,8 +4,8 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { calculateStatistics, emptyStats, kdRatio } from '../../utils/statistics';
-import { statisticalProfiles } from '../../utils/player-continuity.mjs';
+import { calculateStatistics, emptyStats, kdRatio } from '../../data-access/frontend-public';
+import { statisticalProfiles } from '../../data-access/frontend-public';
 
 const allTeams = await getCollection('teams');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));

@@ -6,7 +6,7 @@ import { getOverallStandings } from '../../utils/standings';
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { calculateStatistics, emptyStats } from '../../utils/statistics';
+import { calculateStatistics, emptyStats } from '../../data-access/frontend-public';
 import { getRoundName, getRoundOrder } from '../../utils/tournament';
 import {
   getTournamentMap,
