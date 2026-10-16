@@ -88,7 +88,7 @@ test('unfinished bracket resolves completed sources and labels undecided ones', 
   const qf = match(fixtures, 'm06');
   assert.equal(resolveSourceTeam(qf, 1, tournament, fixtures), 'cha-tra-mue');
   assert.equal(resolveSourceTeam(qf, 2, tournament, fixtures), undefined);
-  assert.equal(getParticipantLabel(qf, 2), 'Winner of m01');
+  assert.equal(getParticipantLabel(qf, 2), 'Winner M1');
   Object.assign(match(fixtures, 'm01'), structuredClone(match(matches, 'm01')));
   assert.equal(resolveSourceTeam(qf, 2, tournament, fixtures), 'team-69');
   assert.doesNotThrow(() => validateTournament(upcoming, fixtures, teamIds));
@@ -120,4 +120,21 @@ test('round display names can change without breaking placement identification',
 
 test('completed tournaments cannot silently omit the final', () => {
   assert.throws(() => check(matches.filter(m => m.id !== 'm13')), /empty slot/);
+});
+
+
+test('participant placeholders use concise source match numbers across tournaments and bronze', () => {
+  for (const [id, number] of [['m01', 1], ['s2-m05', 5], ['any-tournament-m09', 9], ['another_stage_M010', 10]]) {
+    const fixture = { data: { team1Source: { type: 'winner', matchId: id }, team2Source: { type: 'loser', matchId: id } } };
+    assert.equal(getParticipantLabel(fixture, 1), `Winner M${number}`);
+    assert.equal(getParticipantLabel(fixture, 2), `Loser M${number}`);
+    assert.equal(getSourceNode(fixture, 1), id);
+  }
+});
+
+test('missing, bye and unnumbered sources never expose technical identifiers', () => {
+  assert.equal(getParticipantLabel({ data: {} }, 1), 'TBD');
+  assert.equal(getParticipantLabel({ data: { team1Source: { type: 'bye', byeId: 'seed-alpha' } } }, 1), 'TBD');
+  assert.equal(getParticipantLabel({ data: { team1Source: { type: 'winner', matchId: 'opaque-parent-id' } } }, 1), 'Winner TBD');
+  assert.equal(getParticipantLabel({ data: { team2Source: { type: 'loser', matchId: 'opaque-parent-id' } } }, 2), 'Loser TBD');
 });

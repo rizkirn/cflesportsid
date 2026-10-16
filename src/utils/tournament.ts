@@ -20,7 +20,8 @@ export function getRoundOrder(match: Match, tournaments: TournamentMap) {
 export function getParticipantLabel(match: Match, side: 1 | 2) {
   const source = side === 1 ? match.data.team1Source : match.data.team2Source;
   if (!source || source.type === 'bye') return 'TBD';
-  return `${source.type === 'winner' ? 'Winner' : 'Loser'} of ${source.matchId}`;
+  const number = source.matchId.match(/(?:^|[-_])m(\d+)$/i)?.[1];
+  return `${source.type === 'winner' ? 'Winner' : 'Loser'} ${number ? `M${Number(number)}` : 'TBD'}`;
 }
 
 export function getSourceNode(match: Match, side: 1 | 2) {
