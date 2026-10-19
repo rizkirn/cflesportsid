@@ -6,6 +6,7 @@
     "dev": "node scripts/admin-dev.mjs",
     "dev:admin": "node scripts/admin-dev.mjs",
     "build": "astro build",
+    "typecheck": "node scripts/admin-types.mjs && astro sync && tsc --noEmit",
     "preview": "astro preview",
     "astro": "astro",
     "test": "node --experimental-sqlite --test tests/*.test.mjs tests/*.test.cjs",

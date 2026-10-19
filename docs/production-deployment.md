@@ -12,7 +12,9 @@ Use only `wrangler.production.jsonc` for deployment. It preserves the captured p
 
 With the existing locked dependencies installed, run `npm run build:production`. This explicitly selects the production D1 build and build-only configuration, writes `dist/`, and excludes generated JSON-driven sitemap files. The sitemap URLs are served through the D1 request snapshot. Do not seed or migrate any database during a build.
 
-Run `npm run test:production-tooling`, `node_modules/.bin/tsc --noEmit`, and the existing focused `tests/production-cutover.test.mjs` tests. For isolated CI/local checks, block outbound networking and protect `.wrangler/state`; allow only build outputs and Vite caches. Hash the artifact with the existing `inventory` function from `scripts/phase1a/safety.mjs` and `sha(JSON.stringify(inventory(...)))` from `scripts/phase2b/guards.mjs`. Seal the new artifact checksum rather than assuming byte identity with an earlier build.
+`npm run typecheck` first generates the local Cloudflare binding declarations with `scripts/admin-types.mjs`, synchronizes Astro types, and then runs TypeScript. Use it in clean checkouts instead of invoking TypeScript directly. Generated declarations remain Git-ignored; generation does not access a database or change the binding-free production build configuration.
+
+Run `npm run test:production-tooling`, `npm run typecheck`, and the existing focused `tests/production-cutover.test.mjs` tests. For isolated CI/local checks, block outbound networking and protect `.wrangler/state`; allow only build outputs and Vite caches. Hash the artifact with the existing `inventory` function from `scripts/phase1a/safety.mjs` and `sha(JSON.stringify(inventory(...)))` from `scripts/phase2b/guards.mjs`. Seal the new artifact checksum rather than assuming byte identity with an earlier build.
 
 ## Separately approved deployment
 
