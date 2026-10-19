@@ -6,7 +6,7 @@ import { getOverallStandings } from '../../utils/standings';
 import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
-import { calculateStatistics, emptyStats } from '../../data-access/frontend-public';
+import { calculateStatistics, emptyStats, statisticalProfiles, publicCFGMembership } from '../../data-access/frontend-public';
 import { getRoundName, getRoundOrder } from '../../utils/tournament';
 import {
   getTournamentMap,
@@ -21,8 +21,8 @@ if (!team) return new Response(null, { status: 404 });
 const allTeams = await getFrontendTeams();
 const allPlayers = await getCollection('players');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
-const playersMap = new Map(allPlayers.map(p => [p.id, p]));
-const teamPlayers = team.data.players.map(pid => playersMap.get(pid)).filter(Boolean);
+const membership = publicCFGMembership(statisticalProfiles(allPlayers), allTeams);
+const teamPlayers = membership.getTeamPlayers(team.id);
 const allMatches = await getFrontendMatches();
 
 const teamMatches = allMatches.filter(m => getMatchTeam1Id(m) === team.id || getMatchTeam2Id(m) === team.id);

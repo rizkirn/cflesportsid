@@ -2,6 +2,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import type {CollectionEntry} from 'astro:content';
 import * as engine from '../utils/statistics';
 import * as continuity from '../utils/player-continuity.mjs';
+import {resolveLatestCFGMembership} from '../utils/cfg-membership.mjs';
 import {readPublicData, restorePublicStatisticsKeys, type PublicSnapshot, type PublicCollection, type PublicDatabase} from './public-d1.mjs';
 import {resolvePublicMode, publicSitemapPaths} from './public-mode.mjs';
 
@@ -89,4 +90,10 @@ export {publicSitemapPaths};
 export function publicVetoMapCatalog(stage: {mapPool?:string[]}, maps: Map<string,CollectionEntry<'maps'>>) {
   if (requests.getStore()?.mode !== 'd1' || !stage.mapPool) return maps;
   return new Map(stage.mapPool.map(id => {const map = maps.get(id); if (!map) throw new Error('Public stage map unavailable.'); return [id,{...map,data:{...map.data,active:true}}];}));
+}
+
+
+export function publicCFGMembership(players: CollectionEntry<'players'>[], teams: CollectionEntry<'teams'>[]) {
+  const snapshot = localD1Snapshot();
+  return resolveLatestCFGMembership({players, teams, tournaments: snapshot?.tournaments ?? [], rosters: snapshot?.rosters ?? []});
 }

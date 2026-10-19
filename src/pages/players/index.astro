@@ -5,7 +5,7 @@ import Layout from '../../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../../utils/assets.mjs';
 import { calculateStatistics, emptyStats, kdRatio } from '../../data-access/frontend-public';
-import { statisticalProfiles } from '../../data-access/frontend-public';
+import { statisticalProfiles, publicCFGMembership } from '../../data-access/frontend-public';
 
 const allTeams = await getCollection('teams');
 const teamsMap = new Map(allTeams.map(t => [t.id, t]));
@@ -13,7 +13,8 @@ const teamsMap = new Map(allTeams.map(t => [t.id, t]));
 const allMatches = await getFrontendMatches();
 const calculated = calculateStatistics(allMatches);
 
-const players = statisticalProfiles(await getCollection('players')).map(p => {
+const membership = publicCFGMembership(statisticalProfiles(await getCollection('players')), allTeams);
+const players = membership.players.map(p => {
   const team = p.data.team ? teamsMap.get(p.data.team) : undefined;
   const stats = calculated.players.get(p.id) ?? emptyStats();
   const kd = kdRatio(stats);
