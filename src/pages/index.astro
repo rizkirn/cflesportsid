@@ -122,6 +122,8 @@ const seasons = [
   const number = index + 1;
 
   const tournament = tournaments.find(item =>
+    new RegExp(`^clash-for-glory(?:-road-to-all-star)?-s${number}$`, 'i').test(item.id)
+  ) ?? tournaments.find(item =>
     new RegExp(`\\bS${number}\\b`, 'i').test(item.data.name)
   );
 
