@@ -1,12 +1,14 @@
 ---
 import { getFrontendMatches } from '../data-access/frontend-matches';
+import { getFrontendTournaments } from '../data-access/frontend-bracket';
 export const prerender = false;
 import Thumbnail from '../components/Thumbnail.astro';
 import StandingPenalty from '../components/StandingPenalty.astro';
 import Layout from '../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../utils/assets.mjs';
-import { ALL_STAR_SPOTS, getOverallStandings } from '../utils/standings';
+import { ALL_STAR_SPOTS } from '../utils/standings';
+import { getFrontendStandings } from '../data-access/frontend-standings';
 import { calculateStatistics, emptyStats } from '../data-access/frontend-public';
 import { statisticalProfiles } from '../data-access/frontend-public';
 import { getMatchTeam1Id, getMatchTeam2Id } from '../utils/content';
@@ -31,7 +33,7 @@ const players = statisticalProfiles(allPlayers).map(player => ({
   }
 }));
 
-const standings = getOverallStandings(teams, matches, tournaments);
+const standings = await getFrontendStandings();
 
 const teamById = new Map(
   teams.map(team => [team.id, team])
@@ -113,6 +115,8 @@ const leaders = [
   }
 ];
 
+const timelineTournaments = await getFrontendTournaments();
+
 const seasons = [
   'August',
   'September',
@@ -121,9 +125,9 @@ const seasons = [
 ].map((month, index) => {
   const number = index + 1;
 
-  const tournament = tournaments.find(item =>
+  const tournament = timelineTournaments.find(item =>
     new RegExp(`^clash-for-glory(?:-road-to-all-star)?-s${number}$`, 'i').test(item.id)
-  ) ?? tournaments.find(item =>
+  ) ?? timelineTournaments.find(item =>
     new RegExp(`\\bS${number}\\b`, 'i').test(item.data.name)
   );
 
