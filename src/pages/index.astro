@@ -1,6 +1,6 @@
 ---
 import { getFrontendMatches } from '../data-access/frontend-matches';
-import { getFrontendTournaments } from '../data-access/frontend-bracket';
+import { getFrontendTeams, getFrontendTournaments } from '../data-access/frontend-bracket';
 export const prerender = false;
 import Thumbnail from '../components/Thumbnail.astro';
 import StandingPenalty from '../components/StandingPenalty.astro';
@@ -15,7 +15,7 @@ import { getMatchTeam1Id, getMatchTeam2Id } from '../utils/content';
 import { getRoundOrder } from '../utils/tournament';
 import '../styles/home.css';
 
-const teams = await getCollection('teams');
+const teams = await getFrontendTeams();
 const allPlayers = await getCollection('players');
 const matches = await getFrontendMatches();
 const tournaments = await getCollection('tournaments');

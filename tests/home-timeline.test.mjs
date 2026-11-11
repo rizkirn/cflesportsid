@@ -114,7 +114,7 @@ test('production D1 mode gives both loaders the same complete request snapshot w
 
 test('homepage timeline and tournament index are wired to the same authoritative loader without changing standings input', () => {
   const index = readFileSync(new URL('../src/pages/tournament/index.astro', import.meta.url), 'utf8');
-  assert.match(homepage, /import \{ getFrontendTournaments \} from '..\/data-access\/frontend-bracket'/);
+  assert.match(homepage, /import \{ getFrontendTeams, getFrontendTournaments \} from '..\/data-access\/frontend-bracket'/);
   assert.match(homepage, /const timelineTournaments = await getFrontendTournaments\(\)/);
   assert.match(index, /const allTournaments = await getFrontendTournaments\(\)/);
   assert.match(timelineSource, /timelineTournaments\.find/);
