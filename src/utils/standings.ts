@@ -3,6 +3,8 @@ import { calculateStatistics } from './statistics';
 import { getMatchRound } from './tournament';
 import { resolveAsset, assetErrorHandler } from './assets.mjs';
 
+export const ALL_STAR_SPOTS = 10;
+
 export function getOverallStandings(teams: CollectionEntry<'teams'>[], matches: CollectionEntry<'matches'>[], tournaments: CollectionEntry<'tournaments'>[]) {
   const statistics = calculateStatistics(matches);
   return teams.map(team => {
@@ -21,5 +23,6 @@ export function getOverallStandings(teams: CollectionEntry<'teams'>[], matches: 
     const penalties = team.data.penalties ?? [];
     const penaltyPoints = penalties.reduce((sum, penalty) => sum + penalty.points, 0);
     return { id: team.id, name: team.data.name, tag: team.data.tag, logo: resolveAsset('teams', team).src, logoError: assetErrorHandler('teams',team), killPoints, placementPoints, penalties, penaltyPoints, totalScore: killPoints + placementPoints - penaltyPoints, isTournamentWinner };
-  }).sort((a, b) => b.totalScore - a.totalScore);
+  }).sort((a, b) => b.totalScore - a.totalScore)
+    .map((team, index) => ({ ...team, isQualified: index < ALL_STAR_SPOTS }));
 }

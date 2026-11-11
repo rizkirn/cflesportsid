@@ -6,7 +6,7 @@ import StandingPenalty from '../components/StandingPenalty.astro';
 import Layout from '../layouts/Layout.astro';
 import { getAssetCollection as getCollection } from '../data-access/frontend-assets';
 import { resolveAsset, assetErrorHandler } from '../utils/assets.mjs';
-import { getOverallStandings } from '../utils/standings';
+import { ALL_STAR_SPOTS, getOverallStandings } from '../utils/standings';
 import { calculateStatistics, emptyStats } from '../data-access/frontend-public';
 import { statisticalProfiles } from '../data-access/frontend-public';
 import { getMatchTeam1Id, getMatchTeam2Id } from '../utils/content';
@@ -145,19 +145,8 @@ const latestTournament = [...tournaments]
     b.data.startDate.localeCompare(a.data.startDate)
   )[0];
 
-/*
- * Tournament winners are the teams already guaranteed
- * an All-Star position.
- *
- * The standings utility already determines this through
- * isTournamentWinner, so we reuse that instead of
- * hard-coding qualified teams.
- */
-const qualifiedTeams = standings.filter(
-  team => team.isTournamentWinner
-);
-
-const allStarSpots = 10;
+const qualifiedTeams = standings.filter(team => team.isQualified);
+const allStarSpots = ALL_STAR_SPOTS;
 
 const remainingSpots = Math.max(0, allStarSpots - qualifiedTeams.length);
 
@@ -286,15 +275,14 @@ const qualificationPercent = Math.min(
             </h2>
 
             <p class="panel-description">
-              Tournament winners secure their place.
-              Remaining spots are decided by the final
-              Road to All-Star standings.
+              The top {allStarSpots} teams in the final overall
+              Road to All-Star standings qualify for All-Star.
             </p>
           </div>
 
           <div class="qualification-count">
             <strong>{qualifiedTeams.length}</strong>
-            <span>/ {allStarSpots} qualified</span>
+            <span>/{allStarSpots} Qualified</span>
           </div>
 
         </div>
@@ -315,10 +303,12 @@ const qualificationPercent = Math.min(
               <span><strong>{team.name}</strong><small>Qualified</small></span>
             </a>
           ))}
-          <p class="qualification-remaining">
-            <strong>{remainingSpots}</strong>
-            <span>{remainingSpots === 1 ? 'place remaining' : remainingSpots === 0 ? 'All places filled' : 'places remaining'}</span>
-          </p>
+          {remainingSpots > 0 && (
+            <p class="qualification-remaining">
+              <strong>{remainingSpots}</strong>
+              <span>{remainingSpots === 1 ? 'place remaining' : 'places remaining'}</span>
+            </p>
+          )}
         </div>
       </section>
 
@@ -521,14 +511,14 @@ const qualificationPercent = Math.min(
                     </td>
 
                     <td>
-                      {team.isTournamentWinner ? (
+                      {team.isQualified ? (
                         <span class="qualified-label">
                           Qualified
                         </span>
                       ) : (
                         <span
                           class="pending-status"
-                          aria-label="Not yet qualified"
+                          aria-label="Not qualified"
                         >
                           —
                         </span>
@@ -604,14 +594,14 @@ const qualificationPercent = Math.min(
                           </td>
 
                           <td>
-                            {team.isTournamentWinner ? (
+                            {team.isQualified ? (
                               <span class="qualified-label">
                                 Qualified
                               </span>
                             ) : (
                               <span
                                 class="pending-status"
-                                aria-label="Not yet qualified"
+                                aria-label="Not qualified"
                               >
                                 —
                               </span>
