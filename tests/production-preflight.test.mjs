@@ -22,7 +22,7 @@ test('no mutation, import, backup or deployment methods exist',()=>{const api=cl
 import {mkdtempSync,writeFileSync,readFileSync} from 'node:fs';
 import {productionPreflight} from '../scripts/phase2c/production-preflight.mjs';
 import {ROOT} from '../scripts/phase2b/guards.mjs';
-async function rehearsal({change=false}={}){
+async function rehearsal({change=false,rollback=false}={}){
  const root=mkdtempSync('/private/tmp/cfl-production-preflight-mock-'),{plan,approval}=fixture();
  const planPath=root+'/plan.json',approvalPath=root+'/approval.json';writeFileSync(planPath,JSON.stringify(plan),{mode:0o600});writeFileSync(approvalPath,JSON.stringify(approval),{mode:0o600});
  const schema=expectedSchema(11),baseline=JSON.parse(readFileSync(ROOT+'/scripts/phase2b/baseline.json')),positions=new Map();
@@ -40,9 +40,106 @@ async function rehearsal({change=false}={}){
  if(suffix==='')return response({id:PRODUCTION.account});if(suffix==='/d1/database/'+PRODUCTION.database)return response({uuid:PRODUCTION.database,name:PRODUCTION.databaseName,version:'production'});
  if(suffix.endsWith('/deployments'))return response({deployments:[{id:deploymentID,versions:[{version_id:versionID,percentage:100}]}]});
  if(suffix.endsWith('/versions/'+versionID)){versionReads++;const b=structuredClone(bindings);if(change&&versionReads===2)b[3].text='CHANGED';return response({id:versionID,resources:{bindings:b}});}
- if(suffix.endsWith('/versions'))return response({items:[{id:versionID}]});if(suffix.endsWith('/script-settings'))return response({tail_consumers:null});if(suffix.endsWith('/settings'))return response({bindings});if(suffix==='/workers/domains')return response([]);if(suffix==='/r2/buckets/production-images')return response({name:'production-images'});
+ if(suffix.endsWith('/versions'))return response({items:[{id:versionID}]});if(suffix.endsWith('/script-settings'))return response({tail_consumers:null});if(suffix.endsWith('/settings'))return response({bindings:rollback?[...bindings,{name:'cflesportsid_staging',type:'d1',id:'4ba57de7-5fda-4703-a956-b1936546986a'}]:bindings});if(suffix==='/workers/domains')return response([]);if(suffix==='/r2/buckets/production-images')return response({name:'production-images'});
  assert.fail('Unexpected mocked endpoint');};
  return {root,run:()=>productionPreflight({planPath,approvalPath,token:'MOCK_ONLY',fetcher}),calls:()=>calls};
 }
 test('bounded end-to-end mock preflight determines state and retains evidence limitations',async()=>{const f=await rehearsal();const report=await f.run();assert.equal(report.schema.migration0011Required,false);assert.equal(report.identityBackfillRequired,true);assert.equal(report.rosters.count,168);assert.equal(report.photos.references,1);assert.equal(report.photos.directR2Existence,'UNVERIFIED');assert.equal(report.audit.rowsWritten,0);assert.ok(!JSON.stringify(report).includes('PRIVATE_SENTINEL'));const count=f.calls();await assert.rejects(f.run,/EEXIST/);assert.equal(f.calls(),count);});
 test('concurrent active binding changes stop the preflight',async()=>{const f=await rehearsal({change:true});await assert.rejects(f.run,/PRODUCTION_BINDINGS_CHANGED/);});
+
+const productionFlags={CFL_PUBLIC_MODE:'d1',CFL_PUBLIC_ACCOUNT_ID:PRODUCTION.account,CFL_PUBLIC_ENVIRONMENT:'production',CFL_PUBLIC_WORKER:PRODUCTION.worker,CFL_PUBLIC_HOSTNAME:PRODUCTION.hostname,CFL_PUBLIC_DATABASE_ID:PRODUCTION.database};
+const d1Bindings=()=>[...structuredClone(bindings),...Object.entries(productionFlags).map(([name,text])=>({type:'plain_text',name,text}))];
+test('verified D1 baseline reports actual mode and retains authentication fingerprint',()=>{
+ const result=inspectProductionBindings(d1Bindings());assert.equal(result.mode,'d1');assert.equal(result.authenticationFingerprint,inspectProductionBindings(bindings).authenticationFingerprint);
+});
+for(const name of Object.keys(productionFlags))test('D1 baseline rejects missing or wrong '+name,()=>{
+ const wrong=d1Bindings();wrong.find(b=>b.name===name).text='unexpected';assert.throws(()=>inspectProductionBindings(wrong));
+ const missing=d1Bindings().filter(b=>b.name!==name);
+ // Missing mode preserves the legacy hybrid default; explicit D1 identity flags remain validated.
+ if(name!=='CFL_PUBLIC_MODE')assert.throws(()=>inspectProductionBindings(missing));
+});
+for(const mode of ['shadow','unexpected','D1','d1 ',''])test('baseline rejects unexpected mode '+JSON.stringify(mode),()=>{
+ const value=d1Bindings();value.find(b=>b.name==='CFL_PUBLIC_MODE').text=mode;assert.throws(()=>inspectProductionBindings(value),/BASELINE_MODE_REJECTED/);
+});
+test('D1 baseline rejects non-text mode, staging binding and duplicate names',()=>{
+ const value=d1Bindings();value.find(b=>b.name==='CFL_PUBLIC_MODE').type='secret_text';assert.throws(()=>inspectProductionBindings(value));
+ assert.throws(()=>inspectProductionBindings([...d1Bindings(),{name:'stage',type:'d1',id:'4ba57de7-5fda-4703-a956-b1936546986a'}]));
+ assert.throws(()=>inspectProductionBindings([...d1Bindings(),{name:'CFL_PUBLIC_MODE',type:'plain_text',text:'d1'}]));
+});
+
+test('rollback baseline accepts extra staging D1 only in current settings, never in active baseline',async()=>{
+ const {inspectCurrentSettings}=await import('../scripts/phase2c/production-preflight.mjs');
+ const active=d1Bindings(),extra={type:'d1',name:'cflesportsid_staging',id:'4ba57de7-5fda-4703-a956-b1936546986a'};
+ const current=[...structuredClone(active),extra];
+ const result=inspectCurrentSettings(active,current);
+ assert.equal(result.additionalD1Bindings[0].purpose,'known staging database');
+ assert.equal(result.activeBindingsPreserved,true);
+ assert.throws(()=>inspectProductionBindings(current),/PRODUCTION_DATABASE_REJECTED/);
+ for(const mutate of [
+  b=>b.find(x=>x.name==='DB').id='wrong',
+  b=>b.find(x=>x.name==='ADMIN_ACCESS_AUD').text='different',
+  b=>b.splice(b.findIndex(x=>x.name==='ASSETS'),1),
+  b=>b.push({type:'plain_text',name:'UNREVIEWED',text:'value'}),
+  b=>b.push({type:'secret_text',name:'UNREVIEWED_SECRET'}),
+  b=>b.push({type:'r2_bucket',name:'OTHER',bucket_name:'other'}),
+ ]){const changed=structuredClone(current);mutate(changed);assert.throws(()=>inspectCurrentSettings(active,changed));}
+ const unknown=inspectCurrentSettings(active,[...active,{...extra,id:'unknown-database'}]);
+ assert.equal(unknown.additionalD1Bindings[0].purpose,'unverified database purpose');
+});
+
+test('complete preflight accepts active production after rollback with current-only staging binding',async()=>{const f=await rehearsal({rollback:true});const report=await f.run();assert.equal(report.currentSettings.additionalD1Bindings[0].purpose,'known staging database');assert.equal(report.audit.rowsWritten,0);});
+
+test('binding drift diagnostics identify all binding types and fields, never values',async()=>{
+ const {inspectCurrentSettings}=await import('../scripts/phase2c/production-preflight.mjs');
+ const active=d1Bindings();active.push({name:'ADMIN_DRAW_KEY',type:'secret_text',metadata:{version:'SECRET_METADATA_SENTINEL'}});
+ const current=structuredClone(active);
+ current.find(b=>b.name==='ADMIN_ACCESS_AUD').text='PRIVATE_CHANGED_SENTINEL';
+ current.find(b=>b.name==='ADMIN_DRAW_KEY').metadata.version='OTHER_SECRET_SENTINEL';
+ assert.throws(()=>inspectCurrentSettings(active,current),error=>{
+  assert.equal(error.message,'PRODUCTION_INHERITED_BINDING_DRIFT');
+  assert.deepEqual(error.bindingDifferences.map(d=>[d.bindingName,d.activeType,d.currentType,d.differingFields]),[
+   ['ADMIN_ACCESS_AUD','plain_text','plain_text',['text']],['ADMIN_DRAW_KEY','secret_text','secret_text',['metadata']]
+  ]);
+  assert.ok(error.bindingDifferences.every(d=>d.classification==='semantic_or_unverified'));
+  for(const value of ['PRIVATE_CHANGED_SENTINEL','SECRET_METADATA_SENTINEL','OTHER_SECRET_SENTINEL','PRIVATE_SENTINEL'])assert.ok(!JSON.stringify(error.bindingDifferences).includes(value));
+  return true;
+ });
+});
+test('D1 id/database_id aliases normalize without discarding other metadata or allowing conflicts',async()=>{
+ const {inspectCurrentSettings}=await import('../scripts/phase2c/production-preflight.mjs');
+ const active=d1Bindings();active[0].preview=false;
+ const current=structuredClone(active);current[0].database_id=current[0].id;delete current[0].id;
+ const result=inspectCurrentSettings(active,current);
+ assert.equal(result.bindingDifferences[0].classification,'equivalent_d1_identity_alias');
+ assert.deepEqual(result.bindingDifferences[0].normalizedDifferingFields,[]);
+ current[0].preview=true;
+ assert.throws(()=>inspectCurrentSettings(active,current),e=>e.bindingDifferences[0].normalizedDifferingFields.includes('preview'));
+ current[0].preview=false;current[0].id='conflicting-id';
+ assert.throws(()=>inspectCurrentSettings(active,current),/PRODUCTION_INHERITED_BINDING_DRIFT/);
+ const both=structuredClone(active);both[0].database_id='wrong';
+ assert.throws(()=>inspectCurrentSettings(both,both),/PRODUCTION_INHERITED_BINDING_DRIFT/);
+});
+test('property order is equivalent but changed binding types and absent secret fields fail closed',async()=>{
+ const {inspectCurrentSettings}=await import('../scripts/phase2c/production-preflight.mjs');
+ const active=d1Bindings(),current=active.map(b=>Object.fromEntries(Object.entries(b).reverse()));
+ assert.equal(inspectCurrentSettings(active,current).bindingDifferences.length,0);
+ current.find(b=>b.name==='ADMIN_ACCESS_AUD').type='secret_text';
+ assert.throws(()=>inspectCurrentSettings(active,current),e=>e.bindingDifferences[0].differingFields.includes('type'));
+});
+
+test('historical compatibility exports retain extracted metadata helpers and flags',async()=>{
+ const shared=await import('../scripts/production/metadata-helpers.mjs');
+ const legacy=await import('../scripts/phase2c/production-preflight.mjs');
+ const cutover=await import('../scripts/phase2c/production-cutover.mjs');
+ assert.equal(legacy.inspectProductionBindings,shared.inspectProductionBindings);
+ assert.equal(legacy.compareProductionBindingMetadata,shared.compareProductionBindingMetadata);
+ assert.equal(cutover.productionReaderFlags,shared.productionReaderFlags);
+});
+
+test('historical plans seal the extracted helper and the compatibility module pins its bytes',async()=>{
+ const {sha}=await import('../scripts/phase2b/guards.mjs');
+ const file='scripts/production/metadata-helpers.mjs',digest=sha(readFileSync(new URL('../'+file,import.meta.url)));
+ assert.equal(productionPlan().inputs[file],digest);
+ const compatibility=readFileSync(new URL('../scripts/phase2c/production-preflight.mjs',import.meta.url),'utf8');
+ assert.ok(compatibility.includes("==='"+digest+"','PRODUCTION_METADATA_HELPERS_CHANGED'"));
+});

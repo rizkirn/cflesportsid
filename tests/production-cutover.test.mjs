@@ -73,3 +73,18 @@ for(const [name,change]of [
  ['ambiguous subdomain',i=>i.subdomain.enabled=undefined],
  ['missing asset settings',i=>i.assets=undefined],
 ])test('configuration capture rejects '+name, async () => {const input=await completeCaptureFixture();change(input);assert.throws(()=>requireProductionConfigurationCapture(input));});
+
+test('configuration capture accepts verified D1 mode and rejects report mode mismatch or drift',async()=>{
+ const {inspectProductionBindings}=await import('../scripts/phase2c/production-preflight.mjs');
+ const input=await completeCaptureFixture();
+ input.version.resources.bindings.push(...Object.entries(productionReaderFlags()).map(([name,text])=>({name,type:'plain_text',text})));
+ const state=inspectProductionBindings(input.version.resources.bindings);
+ Object.assign(input.report,{mode:'d1',bindingsHash:state.bindingsHash,authenticationFingerprint:state.authenticationFingerprint});
+ assert.equal(requireProductionConfigurationCapture(input).bindings.mode,'d1');
+ for(const change of [
+  i=>i.report.mode='shadow',i=>i.report.mode='hybrid',i=>i.report.traffic=50,
+  i=>i.version.resources.bindings[3].text='changed',i=>i.routing.domains[0].service='cflesportsid-uat',
+  i=>i.scriptSettings.observability.enabled=true,i=>i.assets=null,
+  i=>i.version.resources.bindings.find(b=>b.name==='CFL_PUBLIC_ACCOUNT_ID').text='wrong',
+ ]){const modified=structuredClone(input);change(modified);assert.throws(()=>requireProductionConfigurationCapture(modified));}
+});
