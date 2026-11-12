@@ -467,7 +467,6 @@ body:has(.home-page) {
 }
 .qualification-team img { width: 40px; height: 40px; object-fit: contain; }
 .qualification-team strong { display: block; font-size: 15px; }
-.qualification-team small { color: var(--accent); font-size: 11px; text-transform: uppercase; }
 .qualification-remaining { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; color: var(--home-secondary); }
 .qualification-remaining strong { font: 28px var(--home-display); }
 .qualification-remaining span { font-size: 14px; }
