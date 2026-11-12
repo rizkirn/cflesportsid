@@ -20,7 +20,9 @@
     "db:parity": "node scripts/check-d1-parity.mjs",
     "test:frontend": "npm run build && node tests/frontend-pages.integration.mjs",
     "build:production": "CFL_PUBLIC_BUILD_TARGET=production-d1 CFL_ADMIN_CONFIG=wrangler.production-build.jsonc astro build",
-    "test:production-tooling": "node --test tests/production-upload-*.test.cjs tests/production-deployment-config.test.mjs"
+    "test:production-tooling": "node --experimental-sqlite --test tests/production-config-reconstruction.test.mjs tests/production-frontend-preflight.test.mjs tests/production-metadata-*.test.mjs tests/production-recovery-workspace.test.mjs",
+    "test:production-historical": "node --experimental-sqlite --test tests/production-cutover.test.mjs tests/production-preflight.test.mjs tests/production-backup.test.mjs tests/production-backfill.test.mjs tests/production-pinned-version.test.mjs tests/production-qualification-ui-release.test.mjs tests/production-deployment-config.test.mjs tests/production-upload-*.test.cjs",
+    "test:regression": "npm test"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.3.3",
