@@ -1,34 +1,94 @@
-# Production D1-only deployment
+# Production operations and local validation
 
-Production migration and UAT are complete. This document preserves the verified settings and reusable upload guard; it does not authorize remote access, deployment, migration or restoration.
+This document separates current local development checks from historical releases and recovery. It does not authorize production access, deployment, activation, database work, credential changes or restoration.
 
-## Configuration
+**The fixed-version release executors are historical reference material. Do not execute them for new deployments.** Their sequences, pins, evidence gaps and preserved dependencies are documented in [historical-releases.md](historical-releases.md).
 
-Use only `wrangler.production.jsonc` for deployment. It preserves the captured production account, Worker, custom domain, runtime date/flags, workers.dev/preview settings, DB, CFL_ASSETS, ASSETS and asset routing. Only filesystem paths were converted to repository-relative paths. `keep_vars: true` preserves existing remote authentication variables and secrets; no authentication values are stored here. Do not replace it with the default Wrangler or UAT configuration.
+## Current local guidance
 
-`wrangler.production-build.jsonc` is build-only. It has no account, D1 or R2 bindings. Never deploy it. The default Wrangler configuration remains unchanged and is not the production D1-only deployment entry point.
+Use checks appropriate to the change:
 
-## Local build
+| Change | Local validation |
+|---|---|
+| UI, CSS or copy | Relevant tests, affected-page visual checks and compilation/build as applicable |
+| Application behavior | Relevant unit/integration tests, type checks, build and compatibility checks |
+| Database, authentication or infrastructure | Risk-specific tests and explicit review of schema, recovery, bindings, routing or authentication effects |
 
-With the existing locked dependencies installed, run `npm run build:production`. This explicitly selects the production D1 build and build-only configuration, writes `dist/`, and excludes generated JSON-driven sitemap files. The sitemap URLs are served through the D1 request snapshot. Do not seed or migrate any database during a build.
+A minor frontend change does not require replaying historical roster, identity, migration or photo-reference preflights. This repository does not yet provide an approved general-purpose frontend deployment workflow. The local commands below are validation commands, not release authorization.
 
-`npm run typecheck` first generates the local Cloudflare binding declarations with `scripts/admin-types.mjs`, synchronizes Astro types, and then runs TypeScript. Use it in clean checkouts instead of invoking TypeScript directly. Generated declarations remain Git-ignored; generation does not access a database or change the binding-free production build configuration.
+### Configuration and build
 
-Run `npm run test:production-tooling`, `npm run typecheck`, and the existing focused `tests/production-cutover.test.mjs` tests. For isolated CI/local checks, block outbound networking and protect `.wrangler/state`; allow only build outputs and Vite caches. Hash the artifact with the existing `inventory` function from `scripts/phase1a/safety.mjs` and `sha(JSON.stringify(inventory(...)))` from `scripts/phase2b/guards.mjs`. Seal the new artifact checksum rather than assuming byte identity with an earlier build.
+[wrangler.production.jsonc](../wrangler.production.jsonc) is the repository's dedicated production-target configuration. It records the account, Worker, domain, resources, runtime and asset settings. Treat those as configuration inputs to review against separately authorized current evidence, not a fresh description of production. Do not substitute the default or UAT configuration.
 
-## Separately approved deployment
+`keep_vars: true` is not proof of historical variable/secret values and does not by itself restore an active version's configuration after rollback. Binding metadata and authentication fingerprints do not prove secret-value equality or successful login behavior.
 
-1. Obtain explicit approval for fresh read-only production metadata/configuration capture using the existing `production-preflight.mjs` and production target guards. Verify active version, 100% traffic, current mode, actual DB/R2/assets, routes, authentication fingerprint and runtime settings. Compare to this dedicated configuration; stop on drift. Never infer live settings from this file alone.
-2. Prepare a private owner-only operation directory outside Git. Reuse the existing production cutover plan structure and approval checks. Seal target, fresh baseline/version/mode/deployment/fingerprints, configuration checksum, artifact inventory checksum, installed Wrangler CLI checksum, guard source checksums, exact upload arguments, nonce, limits and expiration. Review rollback-version availability without activating it. Require separate explicit human approval of the new digest. Old approvals cannot be reused.
-3. Supply private `production-deployment-plan.json`, `deployment-approval.json`, `deployment-preflight.json` and `execution-start.json` in that directory. They must never enter the repository. Preflight is at most five minutes old. Approval is at most thirty minutes and within plan expiration; readiness must be READY. A fresh production writer/upload pause is a separate owner confirmation.
-4. Start the installed Wrangler CLI from that private directory with the absolute repository `scripts/production/upload-boundary-preload.cjs` and `upload-preload.cjs` preloads, in that order. The exact `versions upload --config <absolute-repository-path>/wrangler.production.jsonc` arguments, tag and other flags must match the approved plan. Use a minimal environment permitted by the preload; disable Wrangler metrics and log writing. Authentication is supplied only in process environment after approval, never command text or checked-in files. Guard hashes are resolved from repository `scripts/production/`; plans are resolved from the private working directory. The one-use upload claim remains after failure.
-5. The guard permits only exact account/Worker metadata GETs, one static-asset session, bounded Worker static-asset transfers and one strict-inheritance version upload. The three corrected metadata GETs are service metadata, script secret-name/type metadata, and preview metadata. No secret mutations, D1/R2 requests, OAuth refresh or activation are allowed through the upload guard. Unknown requests fail closed. Rejection logs retain only sanitized method, path and category. Do not retain metadata response bodies or secret names in diagnostics.
-6. Independently verify the uploaded version before separately guarded activation under the approved plan. The upload preload cannot activate a Worker. Reuse the existing production metadata verification and operation-specific activation approval; never use an unguarded deploy as a shortcut. Check the ACTIVE version at 100%, D1-only mode/no fallback, bindings, routes, authentication and asset routing after activation. No automatic retry or rollback. Smoke requests require their own approval.
+[wrangler.production-build.jsonc](../wrangler.production-build.jsonc) is build-only, with no account, D1 or R2 bindings. Never deploy it.
 
-Wrangler 4.144.0 was the installed version used for the preserved guard. Dependency changes require local request-flow review and new sealed checksums. No permission expansion is implied.
+With existing locked dependencies installed, the available local commands include:
 
-## Recovery and evidence
+```sh
+npm run test:production-tooling
+npm run typecheck
+npm run build:production
+```
 
-Retain private SQL/photo backups, recovery bookmark, rehearsal reports, source/artifact inventories, configuration evidence, approval records and deployment/smoke reports outside Git in durable private storage. The compatible historical hybrid rollback version is `2cd82667-7a4b-4995-9995-444ff260b4af`; confirm availability and compatibility before separately approving rollback. The SQL backup precedes migration 0011 and identity backfill. Restoring it is a separate destructive decision and can discard later writes. R2 objects and Worker code are not restored by SQL import.
+`test:production-tooling` covers routine operational helpers, metadata collection and recovery workspace boundaries using local fixtures. It does not run an operational preflight or recovery CLI.
 
-The original temporary deployed artifact is no longer available locally. Runtime/configuration fields were recovered from retained local session records; this is not fresh live inspection. A rebuild can verify current source/build contracts, but cannot prove byte-for-byte equality to an absent original artifact. Fresh target/configuration verification and a new artifact seal are mandatory before any future deployment.
+`typecheck` generates local binding declarations through [admin-types.mjs](../scripts/admin-types.mjs), synchronizes Astro types and runs TypeScript. Generated declarations remain ignored by Git.
+
+`build:production` selects the production D1 build target and build-only configuration. It writes `dist/`; generated JSON-driven sitemap files are excluded and sitemap URLs use the D1 request snapshot. Do not seed or migrate a database during a build. Use a disposable workspace when protecting existing outputs, and disable external networking and credential access during isolated validation.
+
+[package.json](../package.json) also defines:
+
+- `test:production-historical`: historical cutover, preflight, backup/backfill, pinned release and upload-guard regressions. The backup-plan tests require a real private storage parent; the full command is not a credential-free isolated test recipe.
+- `test:regression`: an alias for unchanged default `npm test` coverage. Neither test command is deployment approval.
+
+Use a new artifact inventory and checksum for a reviewed build. A successful rebuild does not prove byte identity with an earlier artifact or source-to-production equivalence. Historical tooling used more than one inventory representation; record the algorithm and file set rather than comparing unlabeled digests.
+
+### Operational metadata helpers
+
+[metadata-helpers.mjs](../scripts/production/metadata-helpers.mjs) contains pure project-specific target, reader-mode and binding comparisons without migration/schema imports or import-time I/O.
+
+[metadata-collector.mjs](../scripts/production/metadata-collector.mjs) centralizes bounded metadata GET transport, scope restrictions, pagination completeness checks, drift inputs, secret-field rejection and sanitized transport errors. It does not grant upload or activation authority.
+
+[frontend-preflight.mjs](../scripts/production/frontend-preflight.mjs) retains a separately approved operational metadata-review capability. Its CLI obtains authentication, accesses Cloudflare metadata and writes private evidence, so it is not a routine UI check and must not be run merely to validate local CSS. Production use requires explicit scoped approval and a freshly identified expected version. Do not copy an old version UUID or temporary workspace from historical instructions.
+
+`GO_FOR_RELEASE_REVIEW` means only that the implemented metadata/configuration checks passed. Source mapping remains explicitly unverified; approval creation and upload authorization remain false. A report must not be relabeled as an approval or used as a substitute for an approved release plan. Unexpected bindings, unidentified extra databases, runtime/asset drift or incomplete metadata require review, not weakened checks.
+
+## Historical migration and cutover procedures
+
+The earlier D1 migration, identity backfill and reader cutover are historical procedures, not the normal path for a frontend update. Relevant files remain under [scripts/phase2c](../scripts/phase2c), including [production-preflight.mjs](../scripts/phase2c/production-preflight.mjs) and [production-cutover.mjs](../scripts/phase2c/production-cutover.mjs).
+
+The migration preflight includes schema 0010/0011, S1/S2 roster/identity contracts, photo references and approved remote reads. Its name does not make it a generic frontend preflight. The cutover checks protect source-reader and resource-preservation contracts; retaining their tests does not authorize another cutover.
+
+Earlier deployment procedures used private sealed plans, configuration/artifact/CLI/guard hashes, fresh metadata, expiring digest approval, separate writer/upload pause confirmation and single-use claims. [upload-boundary-preload.cjs](../scripts/production/upload-boundary-preload.cjs), [upload-preload.cjs](../scripts/production/upload-preload.cjs) and [upload-request-guard.cjs](../scripts/production/upload-request-guard.cjs) preserve those regression contracts. Their original installed Wrangler reference was 4.144.0; a dependency change requires review, not an assumption that the old request flow remains valid.
+
+These preloads and historical plan formats are not current deployment instructions. Do not combine their plans with the distinct fixed-version JSON uploader. Do not use an unguarded deployment command to bypass a historical restriction.
+
+## Historical pinned-version releases
+
+The selection release (`6f6f4073…` to `2767f1cb…`) and subsequent Qualification UI release (`2767f1cb…` to `06da29a3…`) are catalogued in [historical-releases.md](historical-releases.md).
+
+Their upload, activation-review, activation and postflight scripts stay at their original paths to preserve source bytes, relative imports and regression coverage. Their fixed versions, approval digests, candidate commit, exact source proofs and private temporary paths make them unsuitable for direct reuse.
+
+The dated dashboard observation of `06da29a3` at 100% is distinct from a verified remote artifact fingerprint. The retained local Qualification UI artifact has a verified inventory checksum, but complete source-to-production equivalence and per-script execution details remain unverified. Old local readiness reports are not deployment-success records.
+
+## Recovery-specific procedures
+
+[reconstruct-config.mjs](../scripts/production/reconstruct-config.mjs) is a recovery-oriented operation, not a prerequisite for routine frontend changes. It can obtain credentials, read Cloudflare metadata and replace the exact configuration in a private isolated workspace. Do not execute it without separately scoped approval.
+
+Its pure [active-configuration.mjs](../scripts/production/active-configuration.mjs) validators and [recovery-workspace.mjs](../scripts/production/recovery-workspace.mjs) filesystem safeguards remain testable locally. Reconstruction checks the explicit active variable map, resources, runtime, routing, asset settings and secret metadata. Its current inheritance policy requires verified active/latest correspondence when secrets are present; matching secret names alone is insufficient.
+
+Recovery output can contain nonsecret variable values, private configuration and secret names. Keep captures and configuration files private even when no secret values are exported. Only sanitized reports are suitable for review. Before replacement, the workspace/configuration must meet private-path checks, the reviewed configuration must be unchanged, and its original bytes must be preserved privately. A successful reconstruction does not approve a release.
+
+The older [verify-activation.mjs](../scripts/production/verify-activation.mjs) performs postflight/recovery checks for its fixed historical selection release. It is not a current production-health or rollback tool.
+
+Retain SQL/photo backups, bookmarks, rehearsal reports, source/artifact inventories, approval evidence and deployment reports outside Git in durable private storage. Earlier cutover documentation named hybrid version `2cd82667-7a4b-4995-9995-444ff260b4af`; later pinned chains referenced different stable versions. None is guaranteed available or safe with current D1 schema/data, R2 objects or authentication state.
+
+A SQL backup preceding migration 0011 and identity backfill can discard subsequent writes if restored. SQL import does not restore Worker code or R2 objects. Database restoration, Worker rollback, R2 recovery, credential changes and production smoke checks each require current evidence and explicit scope-specific approval. There is no automatic rollback authorization.
+
+## Before any future production operation
+
+Review and approve a concrete operation against current target/configuration evidence, the proposed source and artifact, the applicable risks and recovery compatibility. Source-mapping uncertainty must remain visible. Where tooling uses seals, obtain fresh reviewed digests rather than replaying historical approvals.
+
+Upload and activation are separate actions. Any approved operation must preserve its applicable resource, secret, endpoint, artifact, expiration, pause, claim and independent verification safeguards. An uncertain submission is not permission to retry, erase a claim or force rollback. This documentation defines boundaries; it does not implement a new release workflow.
